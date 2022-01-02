@@ -1,4 +1,6 @@
-defmodule BGP.Attribute.ASPath do
+defmodule BGP.Message.Update.Attribute.ASPath do
+  @moduledoc false
+
   @type type :: :as_set | :as_sequence
   @type length :: non_neg_integer()
   @type t :: %__MODULE__{type: type(), length: length()}
@@ -6,23 +8,22 @@ defmodule BGP.Attribute.ASPath do
   @enforce_keys [:type, :length]
   defstruct length: nil, type: nil, value: []
 
-  alias BGP.Attribute
+  alias BGP.Message.Encoder
 
-  @behaviour Attribute
+  @behaviour Encoder
 
-  @impl Attribute
-  def decode(<<type::8, length::8, data::binary-size(length)>>),
-    do: {:ok, %__MODULE__{type: decode_type(type), length: length, value: decode_value([], data)}}
-
-  def decode(<<_type::8>>), do: :error
+  @impl Encoder
+  def decode(<<type::8, length::8, asns::binary>>) do
+    {:ok, %__MODULE__{type: decode_type(type), length: length, value: decode_asns([], asns)}}
+  end
 
   defp decode_type(1), do: :as_set
   defp decode_type(2), do: :as_sequence
 
-  defp decode_value(asns, <<>>), do: Enum.reverse(asns)
-  defp decode_value(asns, <<asn::16, rest::binary>>), do: decode_value([asn | asns], rest)
+  defp decode_asns(asns, <<>>), do: Enum.reverse(asns)
+  defp decode_asns(asns, <<asn::16, rest::binary>>), do: decode_asns([asn | asns], rest)
 
-  @impl Attribute
+  @impl Encoder
   def encode(%__MODULE__{type: type, length: length, value: value}),
     do: [<<encode_type(type)::8, length::8>>, Enum.map(value, &<<&1::16>>)]
 

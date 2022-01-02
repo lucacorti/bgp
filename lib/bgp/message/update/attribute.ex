@@ -1,32 +1,25 @@
-defmodule BGP.Attribute do
-  alias BGP.Attribute.{
-    ASPath,
+defmodule BGP.Message.Update.Attribute do
+  @moduledoc false
+
+  alias BGP.Message.Encoder
+
+  alias BGP.Message.Update.Attribute.{
     Aggregator,
+    ASPath,
     AtomicAggregate,
-    Flags,
     LocalPref,
     MultiExitDisc,
     NextHop,
     Origin
   }
 
-  @type t :: struct()
-  @type data :: iodata()
-  @type length :: non_neg_integer()
+  @behaviour Encoder
 
-  @callback decode(data()) :: {:ok, t()} | {:error, :decode_error}
-  @callback encode(t()) :: data()
+  @impl Encoder
+  def decode(<<code::8, data::binary>>),
+    do: module_for_type(code).decode(data)
 
-  @spec decode(data()) :: {:ok, t()} | {:error, :decode_error}
-  def decode(<<flags::binary-size(1), type::8, rest::binary>>) do
-    with {:ok, %Flags{extended: extended}} <- Flags.decode(flags) do
-      length = if extended, do: 2, else: 1
-      data = binary_part(rest, 0, length)
-      module_for_type(type).decode(data)
-    end
-  end
-
-  @spec encode(t()) :: iodata()
+  @impl Encoder
   def encode(%module{} = message) do
     data = module.encode(message)
     length = IO.iodata_length(data)

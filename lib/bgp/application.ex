@@ -8,8 +8,7 @@ defmodule BGP.Application do
   @impl true
   def start(_type, _args) do
     children = [
-      # Starts a worker by calling: BGP.Worker.start_link(arg)
-      # {BGP.Worker, arg}
+      {BGP.Session, [asn: 65_000, bgp_id: "192.168.24.1", host: "192.168.64.2"]}
     ]
 
     # See https://hexdocs.pm/elixir/Supervisor.html

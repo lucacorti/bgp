@@ -1,15 +1,17 @@
-defmodule BGP.Attribute.AtomicAggregate do
+defmodule BGP.Message.Update.Attribute.AtomicAggregate do
+  @moduledoc false
+
   @type t :: %__MODULE__{}
   defstruct []
 
-  alias BGP.Attribute
+  alias BGP.Message.Encoder
 
-  @behaviour Attribute
+  @behaviour Encoder
 
-  @impl Attribute
+  @impl Encoder
   def decode(_data), do: {:ok, %__MODULE__{}}
 
-  @impl Attribute
+  @impl Encoder
   def encode(%__MODULE__{}), do: <<>>
   def encode(_origin), do: :error
 end

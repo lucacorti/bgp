@@ -1,13 +1,15 @@
 defmodule BGP.Message.KeepAlive do
-  defstruct data: ""
+  @moduledoc false
 
-  alias BGP.Message
+  defstruct []
 
-  @behaviour Message
+  alias BGP.Message.Encoder
 
-  @impl Message
-  def decode(_data, _length), do: {:ok, %__MODULE__{}}
+  @behaviour Encoder
 
-  @impl Message
+  @impl Encoder
+  def decode(_data), do: {:ok, %__MODULE__{}}
+
+  @impl Encoder
   def encode(_msg), do: <<>>
 end

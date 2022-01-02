@@ -1,28 +1,44 @@
 defmodule BGP.Message do
-  alias BGP.Message.{KeepAlive, Notification, Open, Update}
+  @moduledoc false
+
+  alias BGP.Message.{Encoder, KeepAlive, Notification, Open, Update}
 
   @type t :: struct()
-  @type data :: iodata()
-  @type length :: non_neg_integer()
 
   @marker 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF
 
-  @callback decode(data(), length()) :: {:ok, t()} | {:error, :decode_error}
-  @callback encode(t()) :: data()
+  @behaviour BGP.Message.Encoder
 
-  @spec decode(data()) :: {:ok, t()} | {:error, :decode_error}
-  def decode(<<@marker::128, length::16, type::8, rest::binary>>) do
-    data = binary_part(rest, 0, length)
-    module_for_type(type).decode(data, length)
-  end
+  @impl Encoder
+  def decode(<<@marker::128, _length::16, type::8, msg::binary>>),
+    do: module_for_type(type).decode(msg)
 
-  @spec encode(t()) :: iodata()
+  @impl Encoder
   def encode(%module{} = message) do
     data = module.encode(message)
-    length = IO.iodata_length(data)
+    length = 19 + IO.iodata_length(data)
     type = type_for_module(module)
 
     [<<@marker::128>>, <<length::16>>, <<type::8>>, data]
+  end
+
+  @spec stream(iodata()) :: Enumerable.t()
+  def stream(data) do
+    Stream.unfold(data, fn
+      <<@marker::128, length::16, _type::8, _rest::binary>> = data
+      when byte_size(data) >= length ->
+        msg_data = binary_part(data, 0, length)
+        rest_size = byte_size(data) - length
+        rest_data = binary_part(data, length, rest_size)
+
+        {{rest_data, msg_data}, rest_data}
+
+      <<>> ->
+        nil
+
+      data ->
+        {{data, nil}, data}
+    end)
   end
 
   @messages [
