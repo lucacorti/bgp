@@ -168,10 +168,10 @@ defmodule BGP.Session do
            (buffer <> data)
            |> Message.stream()
            |> Enum.reduce_while({:noreply, state}, fn {rest, msg}, {:noreply, state} ->
-             with {:ok, msg} <- Message.decode(msg, []),
-                  {:ok, state} <- trigger_event(state, {:msg, msg, :recv}) do
-               {:cont, {:noreply, %{state | buffer: rest}}}
-             else
+             case trigger_event(state, {:msg, msg, :recv}) do
+               {:ok, state} ->
+                 {:cont, {:noreply, %{state | buffer: rest}}}
+
                {:disconnect, _reason, _state} = reply ->
                  {:halt, reply}
 
