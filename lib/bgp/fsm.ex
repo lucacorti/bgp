@@ -194,10 +194,11 @@ defmodule BGP.FSM do
     delay_open_running = timer_running?(fsm, :delay_open)
 
     case decode_msg(fsm, msg, []) do
-      {:ok, %Open{asn: asn, hold_time: hold_time}} when delay_open_running and hold_time > 0 ->
+      {:ok, %Open{hold_time: hold_time} = open} when delay_open_running and hold_time > 0 ->
         {
           :ok,
-          %__MODULE__{fsm | state: :open_confirm, internal: asn == fsm.asn}
+          %__MODULE__{fsm | state: :open_confirm}
+          |> process_open(open)
           |> stop_timer(:connect_retry)
           |> init_timer(:connect_retry, 0)
           |> stop_timer(:delay_open)
@@ -211,10 +212,11 @@ defmodule BGP.FSM do
           [{:msg, compose_open(fsm), :send}, {:msg, %KeepAlive{}, :send}]
         }
 
-      {:ok, %Open{asn: asn}} when delay_open_running ->
+      {:ok, %Open{} = open} when delay_open_running ->
         {
           :ok,
-          %__MODULE__{fsm | state: :open_confirm, internal: asn == fsm.asn}
+          %__MODULE__{fsm | state: :open_confirm}
+          |> process_open(open)
           |> stop_timer(:connect_retry)
           |> init_timer(:connect_retry, 0)
           |> stop_timer(:delay_open)
@@ -227,7 +229,7 @@ defmodule BGP.FSM do
         }
 
       {:ok, %Open{}} ->
-        {:ok, fsm, []}
+        {:ok, process_open(fsm, msg), []}
 
       {:ok, %Notification{code: :unsupported_version_number}} when delay_open_running ->
         {
@@ -351,11 +353,12 @@ defmodule BGP.FSM do
     hold_timer_nonzero = timer_seconds(fsm, :hold_time) != 0
 
     case decode_msg(fsm, msg, []) do
-      {:ok, %Open{asn: asn, hold_time: hold_time}}
+      {:ok, %Open{hold_time: hold_time} = open}
       when delay_open_running and hold_timer_nonzero ->
         {
           :ok,
-          %__MODULE__{fsm | state: :open_confirm, internal: asn == fsm.asn}
+          %__MODULE__{fsm | state: :open_confirm}
+          |> process_open(open)
           |> stop_timer(:connect_retry)
           |> init_timer(:connect_retry, 0)
           |> stop_timer(:delay_open)
@@ -369,10 +372,11 @@ defmodule BGP.FSM do
           [{:msg, compose_open(fsm), :send}, {:msg, %KeepAlive{}, :send}]
         }
 
-      {:ok, %Open{asn: asn}} when hold_timer_nonzero ->
+      {:ok, %Open{} = open} when hold_timer_nonzero ->
         {
           :ok,
-          %__MODULE__{fsm | state: :open_confirm, internal: asn == fsm.asn}
+          %__MODULE__{fsm | state: :open_confirm}
+          |> process_open(open)
           |> stop_timer(:connect_retry)
           |> init_timer(:connect_retry, 0)
           |> stop_timer(:delay_open)
@@ -467,10 +471,11 @@ defmodule BGP.FSM do
 
   def event(%__MODULE__{state: :open_sent} = fsm, {:msg, msg, :recv}) do
     case decode_msg(fsm, msg, []) do
-      {:ok, %Open{asn: asn, hold_time: hold_time}} when hold_time > 0 ->
+      {:ok, %Open{hold_time: hold_time} = open} when hold_time > 0 ->
         {
           :ok,
-          %__MODULE__{fsm | state: :open_confirm, internal: asn == fsm.asn}
+          %__MODULE__{fsm | state: :open_confirm}
+          |> process_open(open)
           |> init_timer(:delay_open, 0)
           |> init_timer(:connect_retry, 0)
           |> stop_timer(:keep_alive)
@@ -485,10 +490,11 @@ defmodule BGP.FSM do
           ]
         }
 
-      {:ok, %Open{asn: asn}} ->
+      {:ok, %Open{} = open} ->
         {
           :ok,
-          %__MODULE__{fsm | state: :open_confirm, internal: asn == fsm.asn}
+          %__MODULE__{fsm | state: :open_confirm}
+          |> process_open(open)
           |> init_timer(:delay_open, 0)
           |> init_timer(:connect_retry, 0)
           |> stop_timer(:keep_alive),
@@ -795,6 +801,11 @@ defmodule BGP.FSM do
       ]
     }
   end
+
+  defp process_open(%__MODULE__{asn: asn} = fsm, %Open{asn: asn}),
+    do: %__MODULE__{fsm | internal: true}
+
+  defp process_open(fsm, _open), do: %__MODULE__{fsm | internal: false}
 
   defp increment_counter(%__MODULE__{counters: counters} = fsm, name),
     do: %__MODULE__{fsm | counters: update_in(counters, [name], &(&1 + 1))}
