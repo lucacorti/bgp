@@ -123,7 +123,7 @@ defmodule BGP.Message.Update do
   defp encode_prefixes(prefixes) do
     Enum.map_reduce(prefixes, 0, fn prefix, length ->
       with {:ok, prefix, prefix_length} <- Prefix.encode(prefix),
-           do: {[<<prefix_length::8>>, prefix], length + 8 + prefix_length}
+           do: {[<<prefix_length::8>>, prefix], length + 1 + div(prefix_length, 8)}
     end)
   end
 end
