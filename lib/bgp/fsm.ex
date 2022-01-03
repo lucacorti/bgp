@@ -37,6 +37,10 @@ defmodule BGP.FSM do
           options: Session.options(),
           asn: BGP.asn(),
           bgp_id: BGP.bgp_id(),
+          delay_open: boolean(),
+          delay_open_time: non_neg_integer(),
+          hold_time: BGP.hold_time(),
+          notification_without_open: boolean(),
           state: state(),
           timers: keyword(Timer.t())
         }
