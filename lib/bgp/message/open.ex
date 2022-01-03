@@ -9,7 +9,7 @@ defmodule BGP.Message.Open do
           asn: pos_integer(),
           bgp_id: Prefix.t(),
           hold_time: non_neg_integer(),
-          parameters: [any()]
+          parameters: [Parameter.t()]
         }
   @enforce_keys [:asn, :bgp_id]
   defstruct asn: nil, bgp_id: nil, hold_time: 0, parameters: []

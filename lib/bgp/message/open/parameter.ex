@@ -4,6 +4,8 @@ defmodule BGP.Message.Open.Parameter do
   alias BGP.Message.Encoder
   alias BGP.Message.Open.Parameter.Capabilities
 
+  @type t :: struct()
+
   @behaviour Encoder
 
   @impl Encoder

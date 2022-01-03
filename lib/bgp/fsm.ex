@@ -228,8 +228,8 @@ defmodule BGP.FSM do
           [{:msg, compose_open(fsm), :send}, {:msg, %KeepAlive{}, :send}]
         }
 
-      {:ok, %Open{}} ->
-        {:ok, process_open(fsm, msg), []}
+      {:ok, %Open{} = open} ->
+        {:ok, process_open(fsm, open), []}
 
       {:ok, %Notification{code: :unsupported_version_number}} when delay_open_running ->
         {
@@ -802,10 +802,9 @@ defmodule BGP.FSM do
     }
   end
 
-  defp process_open(%__MODULE__{asn: asn} = fsm, %Open{asn: asn}),
-    do: %__MODULE__{fsm | internal: true}
-
-  defp process_open(fsm, _open), do: %__MODULE__{fsm | internal: false}
+  defp process_open(%__MODULE__{} = fsm, %Open{asn: asn}) do
+    %__MODULE__{fsm | internal: asn == fsm.asn}
+  end
 
   defp increment_counter(%__MODULE__{counters: counters} = fsm, name),
     do: %__MODULE__{fsm | counters: update_in(counters, [name], &(&1 + 1))}
