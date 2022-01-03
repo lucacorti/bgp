@@ -110,9 +110,11 @@ defmodule BGP.Session do
       socket: nil
     }
 
-    automatic = if options[:automatic], do: :automatic, else: :manual
-
-    trigger_event(state, {:start, automatic, options[:mode]})
+    if options[:automatic] do
+      trigger_event(state, {:start, :automatic, options[:mode]})
+    else
+      {:ok, state}
+    end
   end
 
   @impl Connection
