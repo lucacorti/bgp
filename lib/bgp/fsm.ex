@@ -7,7 +7,7 @@ defmodule BGP.FSM do
   alias BGP.Message.Open.Parameter.Capabilities
 
   @type connection_op :: :connect | :disconnect | :reconnect
-  @type msg_op :: :process | :send
+  @type msg_op :: :recv | :send
 
   @type effect ::
           {:msg, Message.t(), msg_op()}
@@ -20,11 +20,11 @@ defmodule BGP.FSM do
   @type timer_event :: :expires
 
   @type event ::
-          {:tcp_connection, connection_event()}
+          {:msg, Message.t(), :recv}
+          | {:tcp_connection, connection_event()}
           | {:start, start_type(), start_passivity()}
           | {:stop, stop_type()}
           | {:timer, Timer.name(), timer_event()}
-          | Message.t()
 
   @type counter :: pos_integer()
   @type state :: :idle | :active | :open_sent | :open_confirm | :established
@@ -188,7 +188,7 @@ defmodule BGP.FSM do
     end
   end
 
-  def event(%__MODULE__{state: :connect} = fsm, %Open{hold_time: hold_time} = msg) do
+  def event(%__MODULE__{state: :connect} = fsm, {:msg, %Open{hold_time: hold_time} = msg, :recv}) do
     fsm =
       if hold_time > 0 do
         fsm
@@ -221,9 +221,10 @@ defmodule BGP.FSM do
     end
   end
 
-  def event(%__MODULE__{state: :connect} = fsm, %Notification{
-        code: :unsupported_version_number
-      }) do
+  def event(
+        %__MODULE__{state: :connect} = fsm,
+        {:msg, %Notification{code: :unsupported_version_number}, :recv}
+      ) do
     fsm =
       if timer_running?(fsm, :delay_open) do
         fsm
@@ -338,7 +339,7 @@ defmodule BGP.FSM do
       []
     }
 
-  def event(%__MODULE__{state: :active} = fsm, %Open{hold_time: hold_time} = msg) do
+  def event(%__MODULE__{state: :active} = fsm, {:msg, %Open{hold_time: hold_time} = msg, :recv}) do
     if timer_running?(fsm, :delay_open) do
       fsm =
         if timer_seconds(fsm, :hold_time) != 0 do
@@ -367,9 +368,10 @@ defmodule BGP.FSM do
     end
   end
 
-  def event(%__MODULE__{state: :active} = fsm, %Notification{
-        code: :unsupported_version_number
-      }) do
+  def event(
+        %__MODULE__{state: :active} = fsm,
+        {:msg, %Notification{code: :unsupported_version_number}, :recv}
+      ) do
     if timer_running?(fsm, :delay_open) do
       {
         :ok,
@@ -452,7 +454,10 @@ defmodule BGP.FSM do
     }
   end
 
-  def event(%__MODULE__{state: :open_sent} = fsm, %Open{hold_time: hold_time} = msg) do
+  def event(
+        %__MODULE__{state: :open_sent} = fsm,
+        {:msg, %Open{hold_time: hold_time} = msg, :recv}
+      ) do
     fsm =
       if hold_time > 0 do
         fsm
@@ -478,9 +483,10 @@ defmodule BGP.FSM do
     }
   end
 
-  def event(%__MODULE__{state: :open_sent} = fsm, %Notification{
-        code: :unsupported_version_number
-      }) do
+  def event(
+        %__MODULE__{state: :open_sent} = fsm,
+        {:msg, %Notification{code: :unsupported_version_number}, :recv}
+      ) do
     {
       :ok,
       %__MODULE__{fsm | state: :idle}
@@ -567,9 +573,10 @@ defmodule BGP.FSM do
     }
   end
 
-  def event(%__MODULE__{state: :open_confirm} = fsm, %Notification{
-        code: :unsupported_version_number
-      }) do
+  def event(
+        %__MODULE__{state: :open_confirm} = fsm,
+        {:msg, %Notification{code: :unsupported_version_number}, :recv}
+      ) do
     {
       :ok,
       %__MODULE__{fsm | state: :idle}
@@ -578,7 +585,7 @@ defmodule BGP.FSM do
     }
   end
 
-  def event(%__MODULE__{state: :open_confirm} = fsm, %Notification{}) do
+  def event(%__MODULE__{state: :open_confirm} = fsm, {:msg, %Notification{}, :recv}) do
     {
       :ok,
       %__MODULE__{fsm | state: :idle}
@@ -588,7 +595,7 @@ defmodule BGP.FSM do
     }
   end
 
-  def event(%__MODULE__{state: :open_confirm} = fsm, %Open{}) do
+  def event(%__MODULE__{state: :open_confirm} = fsm, {:msg, %Open{}, :recv}) do
     {
       :ok,
       %__MODULE__{fsm | state: :idle}
@@ -600,7 +607,7 @@ defmodule BGP.FSM do
     }
   end
 
-  def event(%__MODULE__{state: :open_confirm} = fsm, %KeepAlive{}) do
+  def event(%__MODULE__{state: :open_confirm} = fsm, {:msg, %KeepAlive{}, :recv}) do
     {
       :ok,
       %__MODULE__{fsm | state: :established}
@@ -685,7 +692,7 @@ defmodule BGP.FSM do
     }
   end
 
-  def event(%__MODULE__{state: :established} = fsm, %Open{}) do
+  def event(%__MODULE__{state: :established} = fsm, {:msg, %Open{}, :recv}) do
     {
       :ok,
       %__MODULE__{fsm | state: :idle}
@@ -708,7 +715,7 @@ defmodule BGP.FSM do
     }
   end
 
-  def event(%__MODULE__{state: :established} = fsm, %Notification{}) do
+  def event(%__MODULE__{state: :established} = fsm, {:msg, %Notification{}, :recv}) do
     {
       :ok,
       %__MODULE__{fsm | state: :idle}
@@ -718,7 +725,7 @@ defmodule BGP.FSM do
     }
   end
 
-  def event(%__MODULE__{state: :established} = fsm, %KeepAlive{}) do
+  def event(%__MODULE__{state: :established} = fsm, {:msg, %KeepAlive{}, :recv}) do
     fsm =
       if timer_seconds(fsm, :hold_time) > 0 do
         fsm
@@ -731,7 +738,7 @@ defmodule BGP.FSM do
     {:ok, fsm, []}
   end
 
-  def event(%__MODULE__{state: :established} = fsm, %Update{} = msg) do
+  def event(%__MODULE__{state: :established} = fsm, {:msg, %Update{} = msg, :recv}) do
     fsm =
       if timer_seconds(fsm, :hold_time) > 0 do
         fsm
@@ -741,7 +748,7 @@ defmodule BGP.FSM do
         fsm
       end
 
-    {:ok, fsm, [{:msg, msg, :process}]}
+    {:ok, fsm, [{:msg, msg, :recv}]}
   end
 
   def event(%__MODULE__{state: :established} = fsm, _event) do
@@ -750,7 +757,7 @@ defmodule BGP.FSM do
       %__MODULE__{fsm | state: :idle}
       |> init_timer(:connect_retry, 0)
       |> increment_counter(:connect_retry),
-      [{:msg, %Notification{code: :fsm}, :send}, {:tcp_connectio, :disconnect}]
+      [{:msg, %Notification{code: :fsm}, :send}, {:tcp_connection, :disconnect}]
     }
   end
 
