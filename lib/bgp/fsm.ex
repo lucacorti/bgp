@@ -270,17 +270,7 @@ defmodule BGP.FSM do
   def event(%__MODULE__{state: :active} = fsm, {:start, _type, _passivity}),
     do: {:ok, fsm, []}
 
-  def event(%__MODULE__{state: :active} = fsm, {:stop, :manual}) do
-    effects =
-      if fsm.notification_without_open do
-        [
-          {:msg, %Notification{code: :cease}, :send},
-          {:tcp_connection, :disconnect}
-        ]
-      else
-        [{:tcp_connection, :disconnect}]
-      end
-
+  def event(%__MODULE__{notification_without_open: true, state: :active} = fsm, {:stop, :manual}) do
     {
       :ok,
       %__MODULE__{fsm | state: :idle}
@@ -288,7 +278,22 @@ defmodule BGP.FSM do
       |> zero_counter(:connect_retry)
       |> stop_timer(:connect_retry)
       |> init_timer(:connect_retry, 0),
-      effects
+      [
+        {:msg, %Notification{code: :cease}, :send},
+        {:tcp_connection, :disconnect}
+      ]
+    }
+  end
+
+  def event(%__MODULE__{state: :active} = fsm, {:stop, :manual}) do
+    {
+      :ok,
+      %__MODULE__{fsm | state: :idle}
+      |> stop_timer(:delay_open)
+      |> zero_counter(:connect_retry)
+      |> stop_timer(:connect_retry)
+      |> init_timer(:connect_retry, 0),
+      [{:tcp_connection, :disconnect}]
     }
   end
 
@@ -692,23 +697,18 @@ defmodule BGP.FSM do
   end
 
   def event(%__MODULE__{state: :established} = fsm, {:timer, :keep_alive, :expires}) do
-    fsm =
-      if timer_seconds(fsm, :hold_time) > 0 do
+    if timer_seconds(fsm, :hold_time) > 0 do
+      {
+        :ok,
         fsm
         |> stop_timer(:keep_alive)
         |> init_timer(:keep_alive)
-        |> start_timer(:keep_alive)
-      else
-        fsm
-      end
-
-    {
-      :ok,
-      fsm,
-      [
-        {:msg, %KeepAlive{}, :send}
-      ]
-    }
+        |> start_timer(:keep_alive),
+        [{:msg, %KeepAlive{}, :send}]
+      }
+    else
+      {:ok, fsm, [{:msg, %KeepAlive{}, :send}]}
+    end
   end
 
   def event(%__MODULE__{state: :established} = fsm, {:tcp_connection, :fails}) do
