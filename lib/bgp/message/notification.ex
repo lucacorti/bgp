@@ -66,7 +66,7 @@ defmodule BGP.Message.Notification do
   @behaviour Encoder
 
   @impl Encoder
-  def decode(<<code::8, subcode::8, data::binary>>),
+  def decode(<<code::8, subcode::8, data::binary>>, _options),
     do: {
       :ok,
       %__MODULE__{code: decode_code(code), subcode: decode_subcode(code, subcode), data: data}
@@ -118,7 +118,7 @@ defmodule BGP.Message.Notification do
   defp decode_subcode(_code, 0), do: :unspecific
 
   @impl Encoder
-  def encode(%__MODULE__{code: code, subcode: subcode, data: data}),
+  def encode(%__MODULE__{code: code, subcode: subcode, data: data}, _options),
     do: [<<encode_code(code)::8>>, <<encode_subcode(code, subcode)::8>>, <<data::binary>>]
 
   defp encode_code(:message_header), do: 1

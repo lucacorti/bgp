@@ -9,9 +9,9 @@ defmodule BGP.Message.Update.Attribute.AtomicAggregate do
   @behaviour Encoder
 
   @impl Encoder
-  def decode(_data), do: {:ok, %__MODULE__{}}
+  def decode(_data, _options), do: {:ok, %__MODULE__{}}
 
   @impl Encoder
-  def encode(%__MODULE__{}), do: <<>>
-  def encode(_origin), do: :error
+  def encode(%__MODULE__{}, _options), do: <<>>
+  def encode(_origin, _options), do: :error
 end

@@ -13,13 +13,13 @@ defmodule BGP.Message.Update.Attribute.NextHop do
   @behaviour Encoder
 
   @impl Encoder
-  def decode(data) do
+  def decode(data, _options) do
     with {:ok, prefix} <- Prefix.decode(data),
          do: {:ok, %__MODULE__{value: prefix}}
   end
 
   @impl Encoder
-  def encode(%__MODULE__{value: value}) do
+  def encode(%__MODULE__{value: value}, _options) do
     with {:ok, prefix, length} <- Prefix.encode(value),
          do: [<<length::8>>, prefix]
   end

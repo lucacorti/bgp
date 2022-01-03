@@ -15,7 +15,7 @@ defmodule BGP.Message.Open.Parameter.Capabilities.GracefulRestart do
   @behaviour Encoder
 
   @impl Encoder
-  def decode(<<restarted::1, _reserved::3, time::12, rest::binary>>),
+  def decode(<<restarted::1, _reserved::3, time::12, rest::binary>>, _options),
     do: {:ok, %__MODULE__{restarted: restarted == 1, time: time, afs: decode_afs(rest, [])}}
 
   defp decode_afs(<<>>, afs), do: Enum.reverse(afs)
@@ -24,5 +24,5 @@ defmodule BGP.Message.Open.Parameter.Capabilities.GracefulRestart do
     do: decode_afs(rest, [{AFN.decode_afi(afi), AFN.decode_safi(safi), forwarding == 1} | afs])
 
   @impl Encoder
-  def encode(_multi_protocol), do: []
+  def encode(_multi_protocol, _options), do: []
 end

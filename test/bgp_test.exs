@@ -7,9 +7,9 @@ defmodule BGPTest do
   test "KEEPALIVE encode and decode" do
     assert {:ok, %KeepAlive{}} =
              %KeepAlive{}
-             |> BGP.Message.encode()
+             |> BGP.Message.encode([])
              |> IO.iodata_to_binary()
-             |> BGP.Message.decode()
+             |> BGP.Message.decode([])
   end
 
   test "NOTIFICATION encode and decode" do
@@ -19,9 +19,9 @@ defmodule BGPTest do
 
     assert {:ok, %Notification{code: ^code, subcode: ^subcode, data: ^data}} =
              %Notification{code: code, subcode: subcode, data: data}
-             |> BGP.Message.encode()
+             |> BGP.Message.encode([])
              |> IO.iodata_to_binary()
-             |> BGP.Message.decode()
+             |> BGP.Message.decode([])
   end
 
   test "OPEN encode and decode" do
@@ -30,9 +30,9 @@ defmodule BGPTest do
 
     assert {:ok, %Open{asn: ^asn, bgp_id: ^bgp_id, hold_time: 0}} =
              %Open{asn: asn, bgp_id: bgp_id}
-             |> BGP.Message.encode()
+             |> BGP.Message.encode([])
              |> IO.iodata_to_binary()
-             |> BGP.Message.decode()
+             |> BGP.Message.decode([])
   end
 
   test "UPDATE encode and decode" do
@@ -40,8 +40,8 @@ defmodule BGPTest do
 
     assert {:ok, %Update{withdrawn_routes: ^w_r}} =
              %Update{withdrawn_routes: w_r}
-             |> BGP.Message.encode()
+             |> BGP.Message.encode([])
              |> IO.iodata_to_binary()
-             |> BGP.Message.decode()
+             |> BGP.Message.decode([])
   end
 end

@@ -168,7 +168,7 @@ defmodule BGP.Session do
            (buffer <> data)
            |> Message.stream()
            |> Enum.reduce_while({:noreply, state}, fn {rest, msg}, {:noreply, state} ->
-             with {:ok, msg} <- Message.decode(msg),
+             with {:ok, msg} <- Message.decode(msg, []),
                   {:ok, state} <- trigger_event(state, msg) do
                {:cont, {:noreply, %{state | buffer: rest}}}
              else
@@ -210,7 +210,7 @@ defmodule BGP.Session do
   end
 
   defp process_effect(%{socket: socket} = state, {:msg, msg, :send}) do
-    data = Message.encode(msg)
+    data = Message.encode(msg, [])
 
     case :gen_tcp.send(socket, data) do
       :ok -> {:ok, state}

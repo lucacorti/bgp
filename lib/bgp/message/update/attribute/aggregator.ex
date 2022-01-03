@@ -12,16 +12,16 @@ defmodule BGP.Message.Update.Attribute.Aggregator do
   @behaviour Encoder
 
   @impl Encoder
-  def decode(<<asn::16, prefix::binary()-size(4)>>),
+  def decode(<<asn::16, prefix::binary()-size(4)>>, _options),
     do: {:ok, %__MODULE__{asn: asn, address: Prefix.decode(prefix)}}
 
   def decode(_data), do: :error
 
   @impl Encoder
-  def encode(%__MODULE__{asn: asn, address: address}) do
+  def encode(%__MODULE__{asn: asn, address: address}, _options) do
     with {:ok, prefix, 32 = _length} <- Prefix.encode(address),
          do: <<asn::16, prefix::binary()-size(4)>>
   end
 
-  def encode(_origin), do: :error
+  def encode(_origin, _options), do: :error
 end

@@ -7,12 +7,12 @@ defmodule BGP.Message.Open.Parameter do
   @behaviour Encoder
 
   @impl Encoder
-  def decode(<<type::8, length::8, data::binary()-size(length)>>),
-    do: module_for_type(type).decode(data)
+  def decode(<<type::8, length::8, data::binary()-size(length)>>, options),
+    do: module_for_type(type).decode(data, options)
 
   @impl Encoder
-  def encode(%module{} = message) do
-    data = module.encode(message)
+  def encode(%module{} = message, options) do
+    data = module.encode(message, options)
     length = IO.iodata_length(data)
     type = type_for_module(module)
 

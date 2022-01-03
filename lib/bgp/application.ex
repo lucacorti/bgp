@@ -11,9 +11,6 @@ defmodule BGP.Application do
       {BGP.Session, [asn: 65_000, bgp_id: "192.168.24.1", host: "192.168.64.2"]}
     ]
 
-    # See https://hexdocs.pm/elixir/Supervisor.html
-    # for other strategies and supported options
-    opts = [strategy: :one_for_one, name: BGP.Supervisor]
-    Supervisor.start_link(children, opts)
+    Supervisor.start_link(children, strategy: :one_for_one, name: BGP.Supervisor)
   end
 end

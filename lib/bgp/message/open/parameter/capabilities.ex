@@ -18,23 +18,24 @@ defmodule BGP.Message.Open.Parameter.Capabilities do
   @behaviour Encoder
 
   @impl Encoder
-  def decode(capabilities),
-    do: {:ok, %__MODULE__{capabilities: decode_capabilities(capabilities, [])}}
+  def decode(capabilities, options),
+    do: {:ok, %__MODULE__{capabilities: decode_capabilities(capabilities, [], options)}}
 
-  defp decode_capabilities(<<>>, capabilities), do: Enum.reverse(capabilities)
+  defp decode_capabilities(<<>>, capabilities, _options), do: Enum.reverse(capabilities)
 
   defp decode_capabilities(
          <<code::8, length::8, value::binary()-size(length), rest::binary()>>,
-         capabilities
+         capabilities,
+         options
        ) do
-    with {:ok, capability} <- module_for_type(code).decode(value),
-         do: decode_capabilities(rest, [capability | capabilities])
+    with {:ok, capability} <- module_for_type(code).decode(value, options),
+         do: decode_capabilities(rest, [capability | capabilities], options)
   end
 
   @impl Encoder
-  def encode(%__MODULE__{capabilities: capabilities}) do
+  def encode(%__MODULE__{capabilities: capabilities}, options) do
     Enum.map(capabilities, fn %module{} = capability ->
-      data = module.encode(capability)
+      data = module.encode(capability, options)
       length = IO.iodata_length(data)
       type = type_for_module(module)
       [<<type::8>>, <<length::8>>, data]

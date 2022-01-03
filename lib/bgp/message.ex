@@ -10,12 +10,12 @@ defmodule BGP.Message do
   @behaviour BGP.Message.Encoder
 
   @impl Encoder
-  def decode(<<@marker::128, _length::16, type::8, msg::binary>>),
-    do: module_for_type(type).decode(msg)
+  def decode(<<@marker::128, _length::16, type::8, msg::binary>>, options),
+    do: module_for_type(type).decode(msg, options)
 
   @impl Encoder
-  def encode(%module{} = message) do
-    data = module.encode(message)
+  def encode(%module{} = message, options) do
+    data = module.encode(message, options)
     length = 19 + IO.iodata_length(data)
     type = type_for_module(module)
 

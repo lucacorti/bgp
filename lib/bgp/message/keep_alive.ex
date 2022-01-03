@@ -8,8 +8,8 @@ defmodule BGP.Message.KeepAlive do
   @behaviour Encoder
 
   @impl Encoder
-  def decode(_data), do: {:ok, %__MODULE__{}}
+  def decode(_data, _options), do: {:ok, %__MODULE__{}}
 
   @impl Encoder
-  def encode(_msg), do: <<>>
+  def encode(_msg, _options), do: <<>>
 end

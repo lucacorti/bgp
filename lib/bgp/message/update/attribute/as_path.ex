@@ -13,7 +13,7 @@ defmodule BGP.Message.Update.Attribute.ASPath do
   @behaviour Encoder
 
   @impl Encoder
-  def decode(<<type::8, length::8, asns::binary>>) do
+  def decode(<<type::8, length::8, asns::binary>>, _options) do
     {:ok, %__MODULE__{type: decode_type(type), length: length, value: decode_asns([], asns)}}
   end
 
@@ -24,7 +24,7 @@ defmodule BGP.Message.Update.Attribute.ASPath do
   defp decode_asns(asns, <<asn::16, rest::binary>>), do: decode_asns([asn | asns], rest)
 
   @impl Encoder
-  def encode(%__MODULE__{type: type, length: length, value: value}),
+  def encode(%__MODULE__{type: type, length: length, value: value}, _options),
     do: [<<encode_type(type)::8, length::8>>, Enum.map(value, &<<&1::16>>)]
 
   defp encode_type(:as_set), do: 1
