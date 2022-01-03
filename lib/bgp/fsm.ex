@@ -138,22 +138,7 @@ defmodule BGP.FSM do
       :ok,
       %__MODULE__{fsm | state: :open_sent}
       |> init_timer(:hold_time),
-      [
-        {
-          :msg,
-          %Open{
-            asn: fsm.asn,
-            bgp_id: fsm.bgp_id,
-            hold_time: fsm.hold_time,
-            parameters: [
-              %Capabilities{
-                capabilities: [%Capabilities.MultiProtocol{afi: :ipv4, safi: :nlri_unicast}]
-              }
-            ]
-          },
-          :send
-        }
-      ]
+      [{:msg, compose_open(fsm), :send}]
     }
   end
 
@@ -176,22 +161,7 @@ defmodule BGP.FSM do
       |> stop_timer(:connect_retry)
       |> init_timer(:connect_retry, 0)
       |> init_timer(:hold_time),
-      [
-        {
-          :msg,
-          %Open{
-            asn: fsm.asn,
-            bgp_id: fsm.bgp_id,
-            hold_time: fsm.hold_time,
-            parameters: [
-              %Capabilities{
-                capabilities: [%Capabilities.MultiProtocol{afi: :ipv4, safi: :nlri_unicast}]
-              }
-            ]
-          },
-          :send
-        }
-      ]
+      [{:msg, compose_open(fsm), :send}]
     }
   end
 
@@ -244,23 +214,7 @@ defmodule BGP.FSM do
         |> init_timer(:connect_retry, 0)
         |> stop_timer(:delay_open)
         |> init_timer(:delay_open, 0),
-        [
-          {
-            :msg,
-            %Open{
-              asn: fsm.asn,
-              bgp_id: fsm.bgp_id,
-              hold_time: fsm.hold_time,
-              parameters: [
-                %Capabilities{
-                  capabilities: [%Capabilities.MultiProtocol{afi: :ipv4, safi: :nlri_unicast}]
-                }
-              ]
-            },
-            :send
-          },
-          {:msg, %KeepAlive{}, :send}
-        ]
+        [{:msg, compose_open(fsm), :send}, {:msg, %KeepAlive{}, :send}]
       }
     else
       {:ok, fsm, []}
@@ -346,22 +300,7 @@ defmodule BGP.FSM do
       |> stop_timer(:delay_open)
       |> init_timer(:delay_open, 0)
       |> init_timer(:hold_time),
-      [
-        {
-          :msg,
-          %Open{
-            asn: fsm.asn,
-            bgp_id: fsm.bgp_id,
-            hold_time: fsm.hold_time,
-            parameters: [
-              %Capabilities{
-                capabilities: [%Capabilities.MultiProtocol{afi: :ipv4, safi: :nlri_unicast}]
-              }
-            ]
-          },
-          :send
-        }
-      ]
+      [{:msg, compose_open(fsm), :send}]
     }
   end
 
@@ -382,22 +321,7 @@ defmodule BGP.FSM do
       %__MODULE__{fsm | state: :open_sent}
       |> init_timer(:connect_retry, 0)
       |> init_timer(:hold_time),
-      [
-        {
-          :msg,
-          %Open{
-            asn: fsm.asn,
-            bgp_id: fsm.bgp_id,
-            hold_time: fsm.hold_time,
-            parameters: [
-              %Capabilities{
-                capabilities: [%Capabilities.MultiProtocol{afi: :ipv4, safi: :nlri_unicast}]
-              }
-            ]
-          },
-          :send
-        }
-      ]
+      [{:msg, compose_open(fsm), :send}]
     }
   end
 
@@ -438,23 +362,7 @@ defmodule BGP.FSM do
         |> init_timer(:connect_retry, 0)
         |> stop_timer(:delay_open)
         |> init_timer(:delay_open, 0),
-        [
-          {
-            :msg,
-            %Open{
-              asn: fsm.asn,
-              bgp_id: fsm.bgp_id,
-              hold_time: fsm.hold_time,
-              parameters: [
-                %Capabilities{
-                  capabilities: [%Capabilities.MultiProtocol{afi: :ipv4, safi: :nlri_unicast}]
-                }
-              ]
-            },
-            :send
-          },
-          {:msg, %KeepAlive{}, :send}
-        ]
+        [{:msg, compose_open(fsm), :send}, {:msg, %KeepAlive{}, :send}]
       }
     end
   end
@@ -843,6 +751,19 @@ defmodule BGP.FSM do
       |> init_timer(:connect_retry, 0)
       |> increment_counter(:connect_retry),
       [{:msg, %Notification{code: :fsm}, :send}, {:tcp_connectio, :disconnect}]
+    }
+  end
+
+  defp compose_open(%__MODULE__{} = fsm) do
+    %Open{
+      asn: fsm.asn,
+      bgp_id: fsm.bgp_id,
+      hold_time: fsm.hold_time,
+      parameters: [
+        %Capabilities{
+          capabilities: [%Capabilities.MultiProtocol{afi: :ipv4, safi: :nlri_unicast}]
+        }
+      ]
     }
   end
 
