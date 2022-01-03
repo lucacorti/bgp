@@ -6,6 +6,8 @@ defmodule BGP.FSM do
   alias BGP.Message.{KeepAlive, Notification, Open, Update}
   alias BGP.Message.Open.Parameter.Capabilities
 
+  require Logger
+
   @type connection_op :: :connect | :disconnect | :reconnect
   @type msg_op :: :recv | :send
 
@@ -191,7 +193,7 @@ defmodule BGP.FSM do
   def event(%__MODULE__{state: :connect} = fsm, {:msg, msg, :recv}) do
     delay_open_running = timer_running?(fsm, :delay_open)
 
-    case Message.decode(msg, []) do
+    case decode_msg(fsm, msg, []) do
       {:ok, %Open{asn: asn, hold_time: hold_time}} when delay_open_running and hold_time > 0 ->
         {
           :ok,
@@ -348,7 +350,7 @@ defmodule BGP.FSM do
     delay_open_running = timer_running?(fsm, :delay_open)
     hold_timer_nonzero = timer_seconds(fsm, :hold_time) != 0
 
-    case Message.decode(msg, []) do
+    case decode_msg(fsm, msg, []) do
       {:ok, %Open{asn: asn, hold_time: hold_time}}
       when delay_open_running and hold_timer_nonzero ->
         {
@@ -464,7 +466,7 @@ defmodule BGP.FSM do
   end
 
   def event(%__MODULE__{state: :open_sent} = fsm, {:msg, msg, :recv}) do
-    case Message.decode(msg, []) do
+    case decode_msg(fsm, msg, []) do
       {:ok, %Open{asn: asn, hold_time: hold_time}} when hold_time > 0 ->
         {
           :ok,
@@ -596,7 +598,7 @@ defmodule BGP.FSM do
   end
 
   def event(%__MODULE__{state: :open_confirm} = fsm, {:msg, msg, :recv}) do
-    case Message.decode(msg, []) do
+    case decode_msg(fsm, msg, []) do
       {:ok, %Notification{}} ->
         {
           :ok,
@@ -716,7 +718,7 @@ defmodule BGP.FSM do
   def event(%__MODULE__{state: :established} = fsm, {:msg, msg, :recv}) do
     hold_timer_nonzero = timer_seconds(fsm, :hold_time) > 0
 
-    case Message.decode(msg, []) do
+    case decode_msg(fsm, msg, []) do
       {:ok, %Open{}} ->
         {
           :ok,
@@ -772,6 +774,13 @@ defmodule BGP.FSM do
       |> increment_counter(:connect_retry),
       [{:msg, %Notification{code: :fsm}, :send}, {:tcp_connection, :disconnect}]
     }
+  end
+
+  defp decode_msg(_fsm, msg, options) do
+    with {:ok, msg} <- Message.decode(msg, options) do
+      Logger.debug("FSM decoded message: #{inspect(msg, pretty: true)}")
+      {:ok, msg}
+    end
   end
 
   defp compose_open(%__MODULE__{} = fsm) do
