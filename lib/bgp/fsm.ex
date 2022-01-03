@@ -33,13 +33,29 @@ defmodule BGP.FSM do
           counters: keyword(counter()),
           internal: boolean(),
           options: Session.options(),
+          asn: BGP.asn(),
+          bgp_id: BGP.bgp_id(),
           state: state(),
           timers: keyword(Timer.t())
         }
 
-  @enforce_keys [:options]
-  defstruct counters: [connect_retry: 0],
+  @enforce_keys [
+    :asn,
+    :bgp_id,
+    :delay_open,
+    :delay_open_time,
+    :hold_time,
+    :notification_without_open,
+    :options
+  ]
+  defstruct asn: nil,
+            bgp_id: nil,
+            delay_open: nil,
+            delay_open_time: nil,
+            hold_time: nil,
+            counters: [connect_retry: 0],
             internal: false,
+            notification_without_open: nil,
             options: [],
             state: :idle,
             timers: [
@@ -50,7 +66,17 @@ defmodule BGP.FSM do
             ]
 
   @spec new(Session.options()) :: t()
-  def new(options), do: struct(__MODULE__, options: options)
+  def new(options),
+    do:
+      struct(__MODULE__,
+        asn: options[:asn],
+        bgp_id: options[:bgp_id],
+        delay_open: options[:delay_open][:enabled],
+        delay_open_time: options[:delay_open][:secs],
+        hold_time: options[:hold_time][:secs],
+        notification_without_open: options[:notification_without_open],
+        options: options
+      )
 
   @spec event(t(), event()) :: {:ok, t(), [effect()]}
   def event(%__MODULE__{state: :idle} = fsm, {:start, _type, :active}),
@@ -107,71 +133,66 @@ defmodule BGP.FSM do
       [{:tcp_connection, :reconnect}]
     }
 
-  def event(
-        %__MODULE__{options: options, state: :connect} = fsm,
-        {:timer, :delay_open, :expires}
-      ),
-      do: {
-        :ok,
-        %__MODULE__{fsm | state: :open_sent}
-        |> init_timer(:hold_time),
-        [
-          {
-            :msg,
-            %Open{
-              asn: options[:asn],
-              bgp_id: options[:bgp_id],
-              hold_time: options[:hold_time][:secs],
-              parameters: [
-                %Capabilities{
-                  capabilities: [%Capabilities.MultiProtocol{afi: :ipv4, safi: :nlri_unicast}]
-                }
-              ]
-            },
-            :send
-          }
-        ]
-      }
+  def event(%__MODULE__{state: :connect} = fsm, {:timer, :delay_open, :expires}) do
+    {
+      :ok,
+      %__MODULE__{fsm | state: :open_sent}
+      |> init_timer(:hold_time),
+      [
+        {
+          :msg,
+          %Open{
+            asn: fsm.asn,
+            bgp_id: fsm.bgp_id,
+            hold_time: fsm.hold_time,
+            parameters: [
+              %Capabilities{
+                capabilities: [%Capabilities.MultiProtocol{afi: :ipv4, safi: :nlri_unicast}]
+              }
+            ]
+          },
+          :send
+        }
+      ]
+    }
+  end
 
-  def event(
-        %__MODULE__{options: options, state: :connect} = fsm,
-        {:tcp_connection, :succeeds}
-      ) do
-    if options[:delay_open][:enabled] do
-      {
-        :ok,
-        fsm
-        |> stop_timer(:connect_retry)
-        |> init_timer(:connect_retry, 0)
-        |> init_timer(:delay_open)
-        |> start_timer(:delay_open),
-        []
-      }
-    else
-      {
-        :ok,
-        %__MODULE__{fsm | state: :open_sent}
-        |> stop_timer(:connect_retry)
-        |> init_timer(:connect_retry, 0)
-        |> init_timer(:hold_time),
-        [
-          {
-            :msg,
-            %Open{
-              asn: options[:asn],
-              bgp_id: options[:bgp_id],
-              hold_time: options[:hold_time][:secs],
-              parameters: [
-                %Capabilities{
-                  capabilities: [%Capabilities.MultiProtocol{afi: :ipv4, safi: :nlri_unicast}]
-                }
-              ]
-            },
-            :send
-          }
-        ]
-      }
-    end
+  def event(%__MODULE__{delay_open: true, state: :connect} = fsm, {:tcp_connection, :succeeds}) do
+    {
+      :ok,
+      fsm
+      |> stop_timer(:connect_retry)
+      |> init_timer(:connect_retry, 0)
+      |> init_timer(:delay_open)
+      |> start_timer(:delay_open),
+      []
+    }
+  end
+
+  def event(%__MODULE__{delay_open: false, state: :connect} = fsm, {:tcp_connection, :succeeds}) do
+    {
+      :ok,
+      %__MODULE__{fsm | state: :open_sent}
+      |> stop_timer(:connect_retry)
+      |> init_timer(:connect_retry, 0)
+      |> init_timer(:hold_time),
+      [
+        {
+          :msg,
+          %Open{
+            asn: fsm.asn,
+            bgp_id: fsm.bgp_id,
+            hold_time: fsm.hold_time,
+            parameters: [
+              %Capabilities{
+                capabilities: [%Capabilities.MultiProtocol{afi: :ipv4, safi: :nlri_unicast}]
+              }
+            ]
+          },
+          :send
+        }
+      ]
+    }
   end
 
   def event(%__MODULE__{state: :connect} = fsm, {:tcp_connection, :fails}) do
@@ -197,10 +218,7 @@ defmodule BGP.FSM do
     end
   end
 
-  def event(
-        %__MODULE__{options: options, state: :connect} = fsm,
-        %Open{hold_time: hold_time} = msg
-      ) do
+  def event(%__MODULE__{state: :connect} = fsm, %Open{hold_time: hold_time} = msg) do
     fsm =
       if hold_time > 0 do
         fsm
@@ -221,7 +239,7 @@ defmodule BGP.FSM do
     if timer_running?(fsm, :delay_open) do
       {
         :ok,
-        %__MODULE__{fsm | state: :open_confirm, internal: msg.asn == options[:asn]}
+        %__MODULE__{fsm | state: :open_confirm, internal: msg.asn == fsm.asn}
         |> stop_timer(:connect_retry)
         |> init_timer(:connect_retry, 0)
         |> stop_timer(:delay_open)
@@ -230,9 +248,9 @@ defmodule BGP.FSM do
           {
             :msg,
             %Open{
-              asn: options[:asn],
-              bgp_id: options[:bgp_id],
-              hold_time: options[:hold_time][:secs],
+              asn: fsm.asn,
+              bgp_id: fsm.bgp_id,
+              hold_time: fsm.hold_time,
               parameters: [
                 %Capabilities{
                   capabilities: [%Capabilities.MultiProtocol{afi: :ipv4, safi: :nlri_unicast}]
@@ -288,9 +306,9 @@ defmodule BGP.FSM do
   def event(%__MODULE__{state: :active} = fsm, {:start, _type, _passivity}),
     do: {:ok, fsm, []}
 
-  def event(%__MODULE__{options: options, state: :active} = fsm, {:stop, :manual}) do
+  def event(%__MODULE__{state: :active} = fsm, {:stop, :manual}) do
     effects =
-      if options[:notification_without_open] do
+      if fsm.notification_without_open do
         [
           {:msg, %Notification{code: :cease}, :send},
           {:tcp_connection, :disconnect}
@@ -320,10 +338,7 @@ defmodule BGP.FSM do
     }
   end
 
-  def event(
-        %__MODULE__{options: options, state: :active} = fsm,
-        {:timer, :delay_open, :expires}
-      ) do
+  def event(%__MODULE__{state: :active} = fsm, {:timer, :delay_open, :expires}) do
     {
       :ok,
       %__MODULE__{fsm | state: :open_sent}
@@ -335,9 +350,9 @@ defmodule BGP.FSM do
         {
           :msg,
           %Open{
-            asn: options[:asn],
-            bgp_id: options[:bgp_id],
-            hold_time: options[:hold_time][:secs],
+            asn: fsm.asn,
+            bgp_id: fsm.bgp_id,
+            hold_time: fsm.hold_time,
             parameters: [
               %Capabilities{
                 capabilities: [%Capabilities.MultiProtocol{afi: :ipv4, safi: :nlri_unicast}]
@@ -350,40 +365,40 @@ defmodule BGP.FSM do
     }
   end
 
-  def event(%__MODULE__{options: options, state: :active} = fsm, {:tcp_connection, :succeeds}) do
-    if options[:delay_open][:enabled] do
-      {
-        :ok,
-        fsm
-        |> stop_timer(:connect_retry)
-        |> init_timer(:connect_retry, 0)
-        |> init_timer(:delay_open),
-        []
-      }
-    else
-      {
-        :ok,
-        %__MODULE__{fsm | state: :open_sent}
-        |> init_timer(:connect_retry, 0)
-        |> init_timer(:hold_time),
-        [
-          {
-            :msg,
-            %Open{
-              asn: options[:asn],
-              bgp_id: options[:bgp_id],
-              hold_time: options[:hold_time][:secs],
-              parameters: [
-                %Capabilities{
-                  capabilities: [%Capabilities.MultiProtocol{afi: :ipv4, safi: :nlri_unicast}]
-                }
-              ]
-            },
-            :send
-          }
-        ]
-      }
-    end
+  def event(%__MODULE__{delay_open: true, state: :active} = fsm, {:tcp_connection, :succeeds}) do
+    {
+      :ok,
+      fsm
+      |> stop_timer(:connect_retry)
+      |> init_timer(:connect_retry, 0)
+      |> init_timer(:delay_open),
+      []
+    }
+  end
+
+  def event(%__MODULE__{delay_open: false, state: :active} = fsm, {:tcp_connection, :succeeds}) do
+    {
+      :ok,
+      %__MODULE__{fsm | state: :open_sent}
+      |> init_timer(:connect_retry, 0)
+      |> init_timer(:hold_time),
+      [
+        {
+          :msg,
+          %Open{
+            asn: fsm.asn,
+            bgp_id: fsm.bgp_id,
+            hold_time: fsm.hold_time,
+            parameters: [
+              %Capabilities{
+                capabilities: [%Capabilities.MultiProtocol{afi: :ipv4, safi: :nlri_unicast}]
+              }
+            ]
+          },
+          :send
+        }
+      ]
+    }
   end
 
   def event(%__MODULE__{state: :active} = fsm, {:tcp_connection, :fails}),
@@ -399,10 +414,7 @@ defmodule BGP.FSM do
       []
     }
 
-  def event(
-        %__MODULE__{options: options, state: :active} = fsm,
-        %Open{hold_time: hold_time} = msg
-      ) do
+  def event(%__MODULE__{state: :active} = fsm, %Open{hold_time: hold_time} = msg) do
     if timer_running?(fsm, :delay_open) do
       fsm =
         if timer_seconds(fsm, :hold_time) != 0 do
@@ -421,7 +433,7 @@ defmodule BGP.FSM do
 
       {
         :ok,
-        %__MODULE__{fsm | state: :open_confirm, internal: msg.asn == options[:asn]}
+        %__MODULE__{fsm | state: :open_confirm, internal: msg.asn == fsm.asn}
         |> stop_timer(:connect_retry)
         |> init_timer(:connect_retry, 0)
         |> stop_timer(:delay_open)
@@ -430,9 +442,9 @@ defmodule BGP.FSM do
           {
             :msg,
             %Open{
-              asn: options[:asn],
-              bgp_id: options[:bgp_id],
-              hold_time: options[:hold_time][:secs],
+              asn: fsm.asn,
+              bgp_id: fsm.bgp_id,
+              hold_time: fsm.hold_time,
               parameters: [
                 %Capabilities{
                   capabilities: [%Capabilities.MultiProtocol{afi: :ipv4, safi: :nlri_unicast}]
@@ -532,10 +544,7 @@ defmodule BGP.FSM do
     }
   end
 
-  def event(
-        %__MODULE__{options: options, state: :open_sent} = fsm,
-        %Open{hold_time: hold_time} = msg
-      ) do
+  def event(%__MODULE__{state: :open_sent} = fsm, %Open{hold_time: hold_time} = msg) do
     fsm =
       if hold_time > 0 do
         fsm
@@ -551,7 +560,7 @@ defmodule BGP.FSM do
 
     {
       :ok,
-      %__MODULE__{fsm | state: :open_confirm, internal: msg.asn == options[:asn]}
+      %__MODULE__{fsm | state: :open_confirm, internal: msg.asn == fsm.asn}
       |> init_timer(:delay_open, 0)
       |> init_timer(:connect_retry, 0)
       |> stop_timer(:keep_alive),
@@ -748,10 +757,7 @@ defmodule BGP.FSM do
     }
   end
 
-  def event(
-        %__MODULE__{state: :established} = fsm,
-        {:timer, :keep_alive, :expires}
-      ) do
+  def event(%__MODULE__{state: :established} = fsm, {:timer, :keep_alive, :expires}) do
     fsm =
       if timer_seconds(fsm, :hold_time) > 0 do
         fsm
