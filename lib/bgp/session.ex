@@ -103,12 +103,7 @@ defmodule BGP.Session do
 
   @impl Connection
   def init(options) do
-    state = %{
-      buffer: <<>>,
-      options: options,
-      fsm: FSM.new(options),
-      socket: nil
-    }
+    state = %{buffer: <<>>, options: options, fsm: FSM.new(options), socket: nil}
 
     if options[:automatic] do
       trigger_event(state, {:start, :automatic, options[:mode]})
@@ -134,8 +129,6 @@ defmodule BGP.Session do
   end
 
   @impl Connection
-  def disconnect(:reconnect, state), do: {:connect, :reconnect, state}
-
   def disconnect(info, %{socket: socket} = state) do
     :ok = :gen_tcp.close(socket)
     Logger.debug("Connection closed, reason: #{inspect(info)}")
@@ -149,7 +142,6 @@ defmodule BGP.Session do
          do: {:reply, :ok, state}
   end
 
-  @impl Connection
   def handle_call({{:stop, :manual}}, _from, state) do
     with {:ok, state} <- trigger_event(state, {:stop, :manual}),
          do: {:reply, :ok, state}
@@ -214,5 +206,4 @@ defmodule BGP.Session do
 
   defp process_effect(_state, {:tcp_connection, :connect}), do: {:connect, :fsm}
   defp process_effect(_state, {:tcp_connection, :disconnect}), do: {:disconnect, :fsm}
-  defp process_effect(_state, {:tcp_connection, :reconnect}), do: {:disconnect, :reconnect}
 end

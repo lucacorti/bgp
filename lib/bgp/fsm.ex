@@ -8,7 +8,7 @@ defmodule BGP.FSM do
 
   require Logger
 
-  @type connection_op :: :connect | :disconnect | :reconnect
+  @type connection_op :: :connect | :disconnect
   @type msg_op :: :recv | :send
 
   @type effect ::
@@ -135,13 +135,13 @@ defmodule BGP.FSM do
   defp process_event(%__MODULE__{state: :connect} = fsm, {:timer, :connect_retry, :expires}),
     do: {
       :ok,
-      %__MODULE__{fsm | state: :connect}
+      fsm
       |> stop_timer(:connect_retry)
       |> init_timer(:connect_retry)
       |> start_timer(:connect_retry)
       |> stop_timer(:delay_open)
       |> init_timer(:delay_open, 0),
-      [{:tcp_connection, :reconnect}]
+      [{:tcp_connection, :connect}]
     }
 
   defp process_event(%__MODULE__{state: :connect} = fsm, {:timer, :delay_open, :expires}) do
