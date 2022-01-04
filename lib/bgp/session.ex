@@ -140,8 +140,7 @@ defmodule BGP.Session do
     :ok = :gen_tcp.close(socket)
     Logger.debug("Connection closed, reason: #{inspect(info)}")
 
-    with {:ok, state} <- trigger_event(state, {:tcp_connection, :fails}),
-         do: {:noconnect, %{state | buffer: <<>>, socket: nil}}
+    {:noconnect, %{state | buffer: <<>>, socket: nil}}
   end
 
   @impl Connection
@@ -164,7 +163,7 @@ defmodule BGP.Session do
 
   def handle_info(
         {:tcp, _port, data},
-        %{fsm: %{state: old_fsm_state} = fsm, buffer: buffer, socket: socket} = state
+        %{fsm: fsm, buffer: buffer, socket: socket} = state
       ) do
     :inet.setopts(socket, active: :once)
 
@@ -173,7 +172,6 @@ defmodule BGP.Session do
     |> Enum.reduce({:noreply, state}, fn {rest, msg}, _return ->
       with {:ok, fsm, effects} <- FSM.event(fsm, {:msg, msg, :recv}),
            {:ok, state} <- process_effects(%{state | buffer: rest, fsm: fsm}, effects) do
-        Logger.debug("FSM state: #{old_fsm_state} -> #{fsm.state}")
         {:noreply, state}
       end
     end)
@@ -184,14 +182,11 @@ defmodule BGP.Session do
          do: {:noreply, state}
   end
 
-  defp trigger_event(%{fsm: %{state: old_fsm_state} = fsm} = state, event) do
+  defp trigger_event(%{fsm: fsm} = state, event) do
     Logger.debug("FSM event: #{inspect(event, pretty: true)}")
 
     with {:ok, fsm, effects} <- FSM.event(fsm, event),
-         {:ok, state} <- process_effects(%{state | fsm: fsm}, effects) do
-      Logger.debug("FSM state: #{old_fsm_state} -> #{fsm.state}")
-      {:ok, state}
-    end
+         do: process_effects(%{state | fsm: fsm}, effects)
   end
 
   defp process_effects(state, effects) do
@@ -211,9 +206,7 @@ defmodule BGP.Session do
   defp process_effect(_state, {:msg, _msg, :recv}), do: :ok
 
   defp process_effect(%{socket: socket}, {:msg, msg, :send}) do
-    data = Message.encode(msg, [])
-
-    case :gen_tcp.send(socket, data) do
+    case :gen_tcp.send(socket, Message.encode(msg, [])) do
       :ok -> :ok
       {:error, reason} -> {:disconnect, reason}
     end
