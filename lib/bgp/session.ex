@@ -171,24 +171,10 @@ defmodule BGP.Session do
     (buffer <> data)
     |> Message.stream()
     |> Enum.reduce({:noreply, state}, fn {rest, msg}, _return ->
-      event = {:msg, msg, :recv}
-
-      with {:ok, fsm, effects} <- FSM.event(fsm, event) do
+      with {:ok, fsm, effects} <- FSM.event(fsm, {:msg, msg, :recv}),
+           {:ok, state} <- process_effects(%{state | buffer: rest, fsm: fsm}, effects) do
         Logger.debug("FSM state: #{old_fsm_state} -> #{fsm.state}")
-
-        Enum.reduce(
-          effects,
-          {:noreply, %{state | buffer: rest, fsm: fsm}},
-          fn effect, return ->
-            case process_effect(state, effect) do
-              :ok ->
-                return
-
-              {action, reason} ->
-                {action, reason, %{state | buffer: rest, fsm: fsm}}
-            end
-          end
-        )
+        {:noreply, state}
       end
     end)
   end
@@ -201,19 +187,25 @@ defmodule BGP.Session do
   defp trigger_event(%{fsm: %{state: old_fsm_state} = fsm} = state, event) do
     Logger.debug("FSM event: #{inspect(event, pretty: true)}")
 
-    with {:ok, fsm, effects} <- FSM.event(fsm, event) do
+    with {:ok, fsm, effects} <- FSM.event(fsm, event),
+         {:ok, state} <- process_effects(%{state | fsm: fsm}, effects) do
       Logger.debug("FSM state: #{old_fsm_state} -> #{fsm.state}")
-
-      Enum.reduce(effects, {:ok, %{state | fsm: fsm}}, fn effect, return ->
-        case process_effect(state, effect) do
-          :ok ->
-            return
-
-          {action, reason} ->
-            {action, reason, %{state | fsm: fsm}}
-        end
-      end)
+      {:ok, state}
     end
+  end
+
+  defp process_effects(state, effects) do
+    Enum.reduce(effects, {:ok, state}, fn effect, return ->
+      Logger.debug("FSM effect: #{inspect(effect)}")
+
+      case process_effect(state, effect) do
+        :ok ->
+          return
+
+        {action, reason} ->
+          {action, reason, state}
+      end
+    end)
   end
 
   defp process_effect(_state, {:msg, _msg, :recv}), do: :ok
