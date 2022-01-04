@@ -32,7 +32,7 @@ defmodule BGP.Session do
                       keys: [
                         secs: [doc: "Connect Retry timer seconds.", type: :non_neg_integer]
                       ],
-                      default: [secs: 5]
+                      default: [secs: 120]
                     ],
                     delay_open: [
                       type: :keyword_list,
@@ -124,27 +124,24 @@ defmodule BGP.Session do
         Logger.metadata(socket: socket)
         Logger.info("Connected on #{info}")
 
-        trigger_event(%{state | socket: socket}, {:tcp_connection, :succeeds})
+        trigger_event(%{state | socket: socket}, {:tcp_connection, :request_acked})
 
       {:error, _} ->
         Logger.error("Connection error on #{info}")
 
-        trigger_event(%{state | socket: nil}, {:tcp_connection, :fails})
+        {:ok, %{state | socket: nil, buffer: <<>>}}
     end
   end
 
   @impl Connection
+  def disconnect(:reconnect, state), do: {:connect, :reconnect, state}
+
   def disconnect(info, %{socket: socket} = state) do
     :ok = :gen_tcp.close(socket)
     Logger.debug("Connection closed, reason: #{inspect(info)}")
 
-    case info do
-      :reconnect ->
-        {:connect, :reconnect, state}
-
-      _info ->
-        {:noconnect, %{state | buffer: <<>>, socket: nil}}
-    end
+    with {:ok, state} <- trigger_event(state, {:tcp_connection, :fails}),
+         do: {:noconnect, %{state | buffer: <<>>, socket: nil}}
   end
 
   @impl Connection
@@ -165,25 +162,35 @@ defmodule BGP.Session do
          do: {:noreply, state}
   end
 
-  def handle_info({:tcp, _port, data}, %{buffer: buffer, socket: socket} = state) do
-    with {:noreply, state} <-
-           (buffer <> data)
-           |> Message.stream()
-           |> Enum.reduce_while({:noreply, state}, fn {rest, msg}, {:noreply, state} ->
-             case trigger_event(state, {:msg, msg, :recv}) do
-               {:ok, state} ->
-                 {:cont, {:noreply, %{state | buffer: rest}}}
+  def handle_info(
+        {:tcp, _port, data},
+        %{fsm: %{state: old_fsm_state} = fsm, buffer: buffer, socket: socket} = state
+      ) do
+    :inet.setopts(socket, active: :once)
 
-               {:disconnect, _reason, _state} = reply ->
-                 {:halt, reply}
+    (buffer <> data)
+    |> Message.stream()
+    |> Enum.reduce({:noreply, state}, fn {rest, msg}, _return ->
+      event = {:msg, msg, :recv}
 
-               {:connect, _reason, _state} = reply ->
-                 {:halt, reply}
-             end
-           end),
-         :ok <- :inet.setopts(socket, active: :once) do
-      {:noreply, state}
-    end
+      with {:ok, fsm, effects} <- FSM.event(fsm, event) do
+        Logger.debug("FSM state: #{old_fsm_state} -> #{fsm.state}")
+
+        Enum.reduce(
+          effects,
+          {:noreply, %{state | buffer: rest, fsm: fsm}},
+          fn effect, return ->
+            case process_effect(state, effect) do
+              :ok ->
+                return
+
+              {action, reason} ->
+                {action, reason, %{state | buffer: rest, fsm: fsm}}
+            end
+          end
+        )
+      end
+    end)
   end
 
   def handle_info({:timer, _timer, :expires} = event, state) do
@@ -191,38 +198,36 @@ defmodule BGP.Session do
          do: {:noreply, state}
   end
 
-  defp trigger_event(%{fsm: %{state: old_state} = fsm} = state, event) do
+  defp trigger_event(%{fsm: %{state: old_fsm_state} = fsm} = state, event) do
     Logger.debug("FSM event: #{inspect(event, pretty: true)}")
 
-    with {:ok, fsm, effects} <- FSM.event(fsm, event),
-         {:ok, state} <- process_effects(%{state | fsm: fsm}, effects) do
-      Logger.debug("FSM state: #{old_state} -> #{fsm.state}")
+    with {:ok, fsm, effects} <- FSM.event(fsm, event) do
+      Logger.debug("FSM state: #{old_fsm_state} -> #{fsm.state}")
 
-      {:ok, state}
+      Enum.reduce(effects, {:ok, %{state | fsm: fsm}}, fn effect, return ->
+        case process_effect(state, effect) do
+          :ok ->
+            return
+
+          {action, reason} ->
+            {action, reason, %{state | fsm: fsm}}
+        end
+      end)
     end
   end
 
-  defp process_effects(state, [] = _effects), do: {:ok, state}
+  defp process_effect(_state, {:msg, _msg, :recv}), do: :ok
 
-  defp process_effects(state, [effect | effects]) do
-    Logger.debug("FSM effect: #{inspect(effect, pretty: true)}")
-
-    with {:ok, state} <- process_effect(state, effect),
-         do: process_effects(state, effects)
-  end
-
-  defp process_effect(%{socket: socket} = state, {:msg, msg, :send}) do
+  defp process_effect(%{socket: socket}, {:msg, msg, :send}) do
     data = Message.encode(msg, [])
 
     case :gen_tcp.send(socket, data) do
-      :ok -> {:ok, state}
-      {:error, reason} -> {:disconnect, reason, state}
+      :ok -> :ok
+      {:error, reason} -> {:disconnect, reason}
     end
   end
 
-  defp process_effect(state, {:msg, _msg, :recv}), do: {:ok, state}
-
-  defp process_effect(state, {:tcp_connection, :connect}), do: {:connect, :fsm, state}
-  defp process_effect(state, {:tcp_connection, :disconnect}), do: {:disconnect, :fsm, state}
-  defp process_effect(state, {:tcp_connection, :reconnect}), do: {:disconnect, :reconnect, state}
+  defp process_effect(_state, {:tcp_connection, :connect}), do: {:connect, :fsm}
+  defp process_effect(_state, {:tcp_connection, :disconnect}), do: {:disconnect, :fsm}
+  defp process_effect(_state, {:tcp_connection, :reconnect}), do: {:disconnect, :reconnect}
 end

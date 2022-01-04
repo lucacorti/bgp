@@ -8,7 +8,8 @@ defmodule BGP.Application do
   @impl true
   def start(_type, _args) do
     children = [
-      {BGP.Session, [asn: 65_000, bgp_id: "192.168.24.1", host: "192.168.64.2"]}
+      {BGP.Session,
+       [asn: 65_000, bgp_id: "192.168.24.1", connect_retry: [secs: 5], host: "192.168.64.2"]}
     ]
 
     Supervisor.start_link(children, strategy: :one_for_one, name: BGP.Supervisor)
