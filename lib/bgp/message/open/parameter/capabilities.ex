@@ -45,6 +45,7 @@ defmodule BGP.Message.Open.Parameter.Capabilities do
   @attributes [
     {MultiProtocol, 1},
     {RouteRefresh, 2},
+    {ExtendedMessage, 6},
     {GracefulRestart, 64},
     {FourOctetsASN, 65}
   ]

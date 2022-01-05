@@ -4,7 +4,7 @@ defmodule BGP do
   """
   alias BGP.Prefix
 
-  @type asn :: non_neg_integer()
+  @type asn :: pos_integer()
   @type bgp_id :: Prefix.t()
   @type hold_time :: non_neg_integer()
 end
