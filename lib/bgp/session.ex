@@ -175,16 +175,16 @@ defmodule BGP.Session do
   end
 
   defp trigger_event(%{fsm: fsm} = state, event) do
-    Logger.debug("FSM event: #{inspect(event, pretty: true)}")
+    Logger.debug("Triggering FSM event: #{inspect(event, pretty: true)}")
 
     with {:ok, fsm, effects} <- FSM.event(fsm, event),
          do: process_effects(%{state | fsm: fsm}, effects)
   end
 
   defp process_effects(state, effects) do
-    Enum.reduce(effects, {:ok, state}, fn effect, return ->
-      Logger.debug("FSM effect: #{inspect(effect)}")
+    Logger.debug("Processing FSM effects: #{inspect(effects)}")
 
+    Enum.reduce(effects, {:ok, state}, fn effect, return ->
       case process_effect(state, effect) do
         :ok ->
           return
@@ -197,8 +197,8 @@ defmodule BGP.Session do
 
   defp process_effect(_state, {:msg, _msg, :recv}), do: :ok
 
-  defp process_effect(%{socket: socket}, {:msg, msg, :send}) do
-    case :gen_tcp.send(socket, Message.encode(msg, [])) do
+  defp process_effect(%{socket: socket}, {:msg, data, :send}) do
+    case :gen_tcp.send(socket, data) do
       :ok -> :ok
       {:error, reason} -> {:disconnect, reason}
     end
