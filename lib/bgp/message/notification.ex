@@ -23,6 +23,10 @@ defmodule BGP.Message.Notification do
       %__MODULE__{code: decode_code(code), subcode: decode_subcode(code, subcode), data: data}
     }
 
+  @impl Encoder
+  def encode(%__MODULE__{code: code, subcode: subcode, data: data}, _options),
+    do: [<<encode_code(code)::8>>, <<encode_subcode(code, subcode)::8>>, <<data::binary>>]
+
   @codes [
     {
       1,
@@ -101,10 +105,6 @@ defmodule BGP.Message.Notification do
   end
 
   defp decode_subcode(_code, 0), do: :unspecific
-
-  @impl Encoder
-  def encode(%__MODULE__{code: code, subcode: subcode, data: data}, _options),
-    do: [<<encode_code(code)::8>>, <<encode_subcode(code, subcode)::8>>, <<data::binary>>]
 
   for {code, reason, _subcodes} <- @codes do
     defp encode_code(unquote(reason)), do: unquote(code)
