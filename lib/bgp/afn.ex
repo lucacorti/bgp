@@ -16,6 +16,7 @@ defmodule BGP.AFN do
     {1, :nlri_unicast},
     {2, :nlri_multicast}
   ]
+
   @spec decode_afi(code()) :: afi()
   for {code, afi} <- @afis do
     def decode_afi(unquote(code)), do: unquote(afi)

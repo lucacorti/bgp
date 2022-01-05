@@ -11,35 +11,53 @@ defmodule BGP.Message.OPEN do
           hold_time: BGP.hold_time(),
           parameters: [Parameter.t()]
         }
-  @enforce_keys [:asn, :bgp_id]
-  defstruct asn: nil, bgp_id: nil, hold_time: 0, parameters: []
+  @enforce_keys [:asn, :bgp_id, :hold_time]
+  defstruct asn: nil, bgp_id: nil, hold_time: nil, parameters: []
 
   @behaviour Encoder
 
   @impl Encoder
   def decode(
-        <<4::8, asn::16, hold_time::16, bgp_id::binary()-size(4), params_length::8,
+        <<version::8, asn::16, hold_time::16, bgp_id::binary()-size(4), params_length::8,
           params::binary()-size(params_length)>>,
         options
       ) do
+    with :ok <- check_version(version),
+         {:ok, bgp_id} <- decode_bgp_id(bgp_id) do
+      {
+        :ok,
+        %__MODULE__{
+          asn: asn,
+          bgp_id: bgp_id,
+          hold_time: hold_time,
+          parameters: decode_parameters(params, [], options)
+        }
+      }
+    end
+  end
+
+  def decode(_data, _options), do: %Encoder.Error{code: :open_message}
+
+  defp check_version(4), do: :ok
+
+  defp check_version(version),
+    do:
+      {:error,
+       %Encoder.Error{
+         code: :open_message_error,
+         subcode: :unsupported_version_number,
+         data: <<version::16>>
+       }}
+
+  defp decode_bgp_id(bgp_id) do
     case Prefix.decode(bgp_id) do
       {:ok, prefix} ->
-        {
-          :ok,
-          %__MODULE__{
-            asn: asn,
-            bgp_id: prefix,
-            hold_time: hold_time,
-            parameters: decode_parameters(params, [], options)
-          }
-        }
+        {:ok, prefix}
 
       _error ->
         {:error, %Encoder.Error{code: :open_message, subcode: :bad_bgp_identifier}}
     end
   end
-
-  def decode(_data, _options), do: %Encoder.Error{code: :open_message}
 
   defp decode_parameters(<<>> = _data, params, _options), do: Enum.reverse(params)
 
@@ -55,13 +73,9 @@ defmodule BGP.Message.OPEN do
 
   @impl Encoder
   def encode(%__MODULE__{parameters: parameters} = msg, options) do
-    case Prefix.encode(msg.bgp_id) do
-      {:ok, bgp_id, 32} ->
-        {data, length} = encode_parameters(parameters, options)
-        [<<4::8>>, <<msg.asn::16>>, <<msg.hold_time::16>>, bgp_id, <<length::8>>, data]
-
-      _error ->
-        :error
+    with {:ok, bgp_id, 32} <- Prefix.encode(msg.bgp_id) do
+      {data, length} = encode_parameters(parameters, options)
+      [<<4::8>>, <<msg.asn::16>>, <<msg.hold_time::16>>, bgp_id, <<length::8>>, data]
     end
   end
 

@@ -28,8 +28,8 @@ defmodule BGP.Message.OPEN.Parameter.Capabilities do
          capabilities,
          options
        ) do
-    with {:ok, capability} <- module_for_type(code).decode(value, options),
-         do: decode_capabilities(rest, [capability | capabilities], options)
+    with {:ok, module} <- module_for_type(code),
+         do: decode_capabilities(rest, [module.decode(value, options) | capabilities], options)
   end
 
   @impl Encoder
@@ -58,8 +58,8 @@ defmodule BGP.Message.OPEN.Parameter.Capabilities do
   defp type_for_module(module), do: raise("Unknown path attribute module #{module}")
 
   for {module, code} <- @attributes do
-    defp module_for_type(unquote(code)), do: unquote(module)
+    defp module_for_type(unquote(code)), do: {:ok, unquote(module)}
   end
 
-  defp module_for_type(code), do: raise("Unknown path attribute type code #{code}")
+  defp module_for_type(_code), do: {:error, %Encoder.Error{code: :open_message}}
 end

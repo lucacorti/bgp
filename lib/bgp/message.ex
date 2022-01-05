@@ -12,14 +12,20 @@ defmodule BGP.Message do
   @behaviour BGP.Message.Encoder
 
   @impl Encoder
-  def decode(<<@marker::128, length::16, type::8, msg::binary>>, options)
-      when length >= @header_size and length <= @max_size do
-    with {:ok, module} <- module_for_type(type),
+  def decode(<<header::binary()-size(19), msg::binary>>, options) do
+    with {:ok, module} <- decode_header(header),
          do: module.decode(msg, options)
   end
 
-  def decode(_msg, _options),
-    do: {:error, %Encoder.Error{code: :message_header, subcode: :bad_message_length}}
+  defp decode_header(<<_marker::128, length::16, _type::8>>)
+       when length < @header_size or length > @max_size do
+    {:error, %Encoder.Error{code: :message_header, subcode: :bad_message_length, data: length}}
+  end
+
+  defp decode_header(<<@marker::128, _length::16, type::8>>), do: module_for_type(type)
+
+  defp decode_header(_header),
+    do: {:error, %Encoder.Error{code: :message_header, subcode: :connection_not_synchronized}}
 
   @impl Encoder
   def encode(%module{} = message, options) do
@@ -67,6 +73,10 @@ defmodule BGP.Message do
     defp module_for_type(unquote(code)), do: {:ok, unquote(module)}
   end
 
-  defp module_for_type(_code),
-    do: {:error, %Encoder.Error{code: :message_header, subcode: :bad_message_type}}
+  defp module_for_type(code) do
+    {
+      :error,
+      %Encoder.Error{code: :message_header, subcode: :bad_message_type, data: <<code::8>>}
+    }
+  end
 end
