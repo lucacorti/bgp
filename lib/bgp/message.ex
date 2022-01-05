@@ -7,6 +7,7 @@ defmodule BGP.Message do
 
   @header_size 19
   @marker 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF
+  @marker_size 128
   @max_size 4_096
 
   @behaviour BGP.Message.Encoder
@@ -17,12 +18,12 @@ defmodule BGP.Message do
          do: module.decode(msg, options)
   end
 
-  defp decode_header(<<_marker::128, length::16, _type::8>>)
+  defp decode_header(<<_marker::@marker_size, length::16, _type::8>>)
        when length < @header_size or length > @max_size do
     {:error, %Encoder.Error{code: :message_header, subcode: :bad_message_length, data: length}}
   end
 
-  defp decode_header(<<@marker::128, _length::16, type::8>>), do: module_for_type(type)
+  defp decode_header(<<@marker::@marker_size, _length::16, type::8>>), do: module_for_type(type)
 
   defp decode_header(_header),
     do: {:error, %Encoder.Error{code: :message_header, subcode: :connection_not_synchronized}}
@@ -33,19 +34,25 @@ defmodule BGP.Message do
     length = @header_size + IO.iodata_length(data)
     type = type_for_module(module)
 
-    [<<@marker::128>>, <<length::16>>, <<type::8>>, data]
+    [<<@marker::@marker_size>>, <<length::16>>, <<type::8>>, data]
   end
 
-  @spec stream(iodata()) :: Enumerable.t()
-  def stream(data) do
+  @spec stream!(iodata()) :: Enumerable.t() | no_return()
+  def stream!(data) do
     Stream.unfold(data, fn
-      <<@marker::128, length::16, _type::8, _rest::binary>> = data
+      <<@marker::@marker_size, length::16, type::8, _rest::binary>> = data
       when byte_size(data) >= length ->
-        msg_data = binary_part(data, 0, length)
-        rest_size = byte_size(data) - length
-        rest_data = binary_part(data, length, rest_size)
+        case decode_header(<<@marker::@marker_size, length::16, type::8>>) do
+          {:ok, _module} ->
+            msg_data = binary_part(data, 0, length)
+            rest_size = byte_size(data) - length
+            rest_data = binary_part(data, length, rest_size)
 
-        {{rest_data, msg_data}, rest_data}
+            {{rest_data, msg_data}, rest_data}
+
+          {:error, error} ->
+            throw(error)
+        end
 
       <<>> ->
         nil

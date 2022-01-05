@@ -6,6 +6,7 @@ defmodule BGP.Session do
   use Connection
 
   alias BGP.{FSM, Message, Prefix}
+  alias BGP.Message.Encoder
 
   require Logger
 
@@ -159,14 +160,22 @@ defmodule BGP.Session do
       ) do
     :inet.setopts(socket, active: :once)
 
-    (buffer <> data)
-    |> Message.stream()
-    |> Enum.reduce({:noreply, state}, fn {rest, msg}, _return ->
-      with {:ok, fsm, effects} <- FSM.event(fsm, {:msg, msg, :recv}),
-           {:ok, state} <- process_effects(%{state | buffer: rest, fsm: fsm}, effects) do
-        {:noreply, state}
-      end
-    end)
+    try do
+      (buffer <> data)
+      |> Message.stream!()
+      |> Enum.reduce({:noreply, state}, fn {rest, msg}, _return ->
+        with {:ok, fsm, effects} <- FSM.event(fsm, {:msg, msg, :recv}),
+             {:ok, state} <- process_effects(%{state | buffer: rest, fsm: fsm}, effects) do
+          {:noreply, state}
+        end
+      end)
+    catch
+      %Encoder.Error{} = error ->
+        data = Message.encode(Encoder.Error.to_notification(error), [])
+
+        with {:ok, state} <- process_effects(state, {:msg, data, :send}),
+             do: {:disconnect, error, state}
+    end
   end
 
   def handle_info({:timer, _timer, :expires} = event, state) do

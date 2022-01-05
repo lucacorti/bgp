@@ -1,6 +1,8 @@
 defmodule BGP.Message.Encoder.Error do
   @moduledoc false
 
+  alias BGP.Message.NOTIFICATION
+
   @type message_header ::
           :connection_not_synchronized
           | :bad_message_length
@@ -63,4 +65,8 @@ defmodule BGP.Message.Encoder.Error do
   @type t :: %__MODULE__{code: code(), subcode: subcode()}
   @enforce_keys [:code]
   defstruct code: nil, subcode: :unspecific, data: <<>>
+
+  @spec to_notification(t()) :: NOTIFICATION.t()
+  def to_notification(%__MODULE__{} = error),
+    do: %NOTIFICATION{code: error.code, subcode: error.subcode, data: error.data}
 end
