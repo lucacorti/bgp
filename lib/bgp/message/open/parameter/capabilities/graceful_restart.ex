@@ -1,4 +1,4 @@
-defmodule BGP.Message.Open.Parameter.Capabilities.GracefulRestart do
+defmodule BGP.Message.OPEN.Parameter.Capabilities.GracefulRestart do
   @moduledoc false
 
   alias BGP.AFN

@@ -1,4 +1,4 @@
-defmodule BGP.Message.KeepAlive do
+defmodule BGP.Message.KEEPALIVE do
   @moduledoc false
 
   defstruct []

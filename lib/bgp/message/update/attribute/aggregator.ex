@@ -1,4 +1,4 @@
-defmodule BGP.Message.Update.Attribute.Aggregator do
+defmodule BGP.Message.UPDATE.Attribute.Aggregator do
   @moduledoc false
 
   alias BGP.Message.Encoder

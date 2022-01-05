@@ -1,4 +1,4 @@
-defmodule BGP.Message.Notification do
+defmodule BGP.Message.NOTIFICATION do
   @moduledoc false
 
   alias BGP.Message.Encoder.Error

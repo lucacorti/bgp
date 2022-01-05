@@ -1,4 +1,4 @@
-defmodule BGP.Message.RouteRefresh do
+defmodule BGP.Message.ROUTEREFRESH do
   @moduledoc false
 
   alias BGP.AFN

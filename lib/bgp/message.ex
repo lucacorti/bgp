@@ -1,7 +1,7 @@
 defmodule BGP.Message do
   @moduledoc false
 
-  alias BGP.Message.{Encoder, KeepAlive, Notification, Open, Update}
+  alias BGP.Message.{Encoder, KEEPALIVE, NOTIFICATION, OPEN, UPDATE}
 
   @type t :: struct()
 
@@ -50,11 +50,11 @@ defmodule BGP.Message do
   end
 
   @messages [
-    {Open, 1},
-    {Update, 2},
-    {Notification, 3},
-    {KeepAlive, 4},
-    {RouteRefresh, 5}
+    {OPEN, 1},
+    {UPDATE, 2},
+    {NOTIFICATION, 3},
+    {KEEPALIVE, 4},
+    {ROUTE_REFRESH, 5}
   ]
 
   for {module, code} <- @messages do

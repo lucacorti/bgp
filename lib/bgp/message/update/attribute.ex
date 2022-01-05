@@ -1,9 +1,9 @@
-defmodule BGP.Message.Update.Attribute do
+defmodule BGP.Message.UPDATE.Attribute do
   @moduledoc false
 
   alias BGP.Message.Encoder
 
-  alias BGP.Message.Update.Attribute.{
+  alias BGP.Message.UPDATE.Attribute.{
     Aggregator,
     AS4Aggregator,
     AS4Path,

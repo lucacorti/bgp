@@ -37,8 +37,8 @@ defmodule BGP.Session do
                     delay_open: [
                       type: :keyword_list,
                       keys: [
-                        enabled: [doc: "Enable Delay Open.", type: :boolean],
-                        secs: [doc: "Delay Open timer seconds.", type: :non_neg_integer]
+                        enabled: [doc: "Enable Delay OPEN.", type: :boolean],
+                        secs: [doc: "Delay OPEN timer seconds.", type: :non_neg_integer]
                       ],
                       default: [enabled: true, secs: 5]
                     ],

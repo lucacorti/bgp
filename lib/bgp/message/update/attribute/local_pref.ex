@@ -1,4 +1,4 @@
-defmodule BGP.Message.Update.Attribute.LocalPref do
+defmodule BGP.Message.UPDATE.Attribute.LocalPref do
   @moduledoc false
 
   @type t :: %__MODULE__{value: non_neg_integer()}

@@ -1,4 +1,4 @@
-defmodule BGP.Message.Update.Attribute.MultiExitDisc do
+defmodule BGP.Message.UPDATE.Attribute.MultiExitDisc do
   @moduledoc false
 
   @type t :: %__MODULE__{value: non_neg_integer()}

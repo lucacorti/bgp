@@ -1,9 +1,9 @@
-defmodule BGP.Message.Open.Parameter.Capabilities do
+defmodule BGP.Message.OPEN.Parameter.Capabilities do
   @moduledoc false
 
   alias BGP.Message.Encoder
 
-  alias BGP.Message.Open.Parameter.Capabilities.{
+  alias BGP.Message.OPEN.Parameter.Capabilities.{
     FourOctetsASN,
     GracefulRestart,
     MultiProtocol,

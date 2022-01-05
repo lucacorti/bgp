@@ -1,4 +1,4 @@
-defmodule BGP.Message.Open.Parameter.Capabilities.FourOctetsASN do
+defmodule BGP.Message.OPEN.Parameter.Capabilities.FourOctetsASN do
   @moduledoc false
 
   @type t :: %__MODULE__{asn: BGP.asn()}

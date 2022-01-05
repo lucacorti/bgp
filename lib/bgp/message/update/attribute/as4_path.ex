@@ -1,4 +1,4 @@
-defmodule BGP.Message.Update.Attribute.AS4Path do
+defmodule BGP.Message.UPDATE.Attribute.AS4Path do
   @moduledoc false
 
   @type type :: :as_set | :as_sequence

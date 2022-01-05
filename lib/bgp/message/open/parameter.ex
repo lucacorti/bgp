@@ -1,16 +1,18 @@
-defmodule BGP.Message.Open.Parameter do
+defmodule BGP.Message.OPEN.Parameter do
   @moduledoc false
 
   alias BGP.Message.Encoder
-  alias BGP.Message.Open.Parameter.Capabilities
+  alias BGP.Message.OPEN.Parameter.Capabilities
 
   @type t :: struct()
 
   @behaviour Encoder
 
   @impl Encoder
-  def decode(<<type::8, length::8, data::binary()-size(length)>>, options),
-    do: module_for_type(type).decode(data, options)
+  def decode(<<type::8, length::8, data::binary()-size(length)>>, options) do
+    with {:ok, module} <- module_for_type(type),
+         do: module.decode(data, options)
+  end
 
   @impl Encoder
   def encode(%module{} = message, options) do
@@ -32,8 +34,9 @@ defmodule BGP.Message.Open.Parameter do
   defp type_for_module(module), do: raise("Unknown path attribute module #{module}")
 
   for {module, code} <- @attributes do
-    defp module_for_type(unquote(code)), do: unquote(module)
+    defp module_for_type(unquote(code)), do: {:ok, unquote(module)}
   end
 
-  defp module_for_type(code), do: raise("Unknown path attribute type code #{code}")
+  defp module_for_type(_code),
+    do: {:error, %Encoder.Error{code: :open_message, subcode: :unsupported_optional_parameter}}
 end

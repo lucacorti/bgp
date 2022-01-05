@@ -1,4 +1,4 @@
-defmodule BGP.Message.Update.Attribute.Origin do
+defmodule BGP.Message.UPDATE.Attribute.Origin do
   @moduledoc false
 
   @type origin :: :igp | :egp | :incomplete

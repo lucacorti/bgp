@@ -1,14 +1,14 @@
-defmodule BGP.Message.Open do
+defmodule BGP.Message.OPEN do
   @moduledoc false
 
   alias BGP.Message.Encoder
-  alias BGP.Message.Open.Parameter
+  alias BGP.Message.OPEN.Parameter
   alias BGP.Prefix
 
   @type t :: %__MODULE__{
-          asn: pos_integer(),
+          asn: BGP.asn(),
           bgp_id: Prefix.t(),
-          hold_time: non_neg_integer(),
+          hold_time: BGP.hold_time(),
           parameters: [Parameter.t()]
         }
   @enforce_keys [:asn, :bgp_id]
@@ -35,9 +35,11 @@ defmodule BGP.Message.Open do
         }
 
       _error ->
-        :error
+        {:error, %Encoder.Error{code: :open_message, subcode: :bad_bgp_identifier}}
     end
   end
+
+  def decode(_data, _options), do: %Encoder.Error{code: :open_message}
 
   defp decode_parameters(<<>> = _data, params, _options), do: Enum.reverse(params)
 
@@ -46,9 +48,9 @@ defmodule BGP.Message.Open do
          parameters,
          options
        ) do
-    with {:ok, paramter} <-
+    with {:ok, parameter} <-
            Parameter.decode(<<type::8, param_length::8, parameter::binary()>>, options),
-         do: decode_parameters(rest, [paramter | parameters], options)
+         do: decode_parameters(rest, [parameter | parameters], options)
   end
 
   @impl Encoder

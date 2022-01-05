@@ -1,8 +1,8 @@
-defmodule BGP.Message.Update do
+defmodule BGP.Message.UPDATE do
   @moduledoc false
 
   alias BGP.Message.Encoder
-  alias BGP.Message.Update.Attribute
+  alias BGP.Message.UPDATE.Attribute
   alias BGP.Prefix
 
   @type t :: %__MODULE__{

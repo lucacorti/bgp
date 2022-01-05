@@ -53,6 +53,6 @@ defmodule BGP.Message.Encoder.Error do
           | :cease
 
   @type t :: %__MODULE__{code: code(), subcode: subcode()}
-  @enforce_keys [:code, :subcode]
-  defstruct code: nil, subcode: nil
+  @enforce_keys [:code]
+  defstruct code: nil, subcode: :unspecific
 end

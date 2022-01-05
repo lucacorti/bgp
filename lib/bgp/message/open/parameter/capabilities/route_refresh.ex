@@ -1,4 +1,4 @@
-defmodule BGP.Message.Open.Parameter.Capabilities.RouteRefresh do
+defmodule BGP.Message.OPEN.Parameter.Capabilities.RouteRefresh do
   @moduledoc false
 
   @type t :: %__MODULE__{}

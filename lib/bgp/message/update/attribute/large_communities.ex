@@ -1,4 +1,4 @@
-defmodule BGP.Message.Update.Attribute.LargeCommunities do
+defmodule BGP.Message.UPDATE.Attribute.LargeCommunities do
   @moduledoc false
 
   @type large_community :: {BGP.asn(), pos_integer(), pos_integer()}

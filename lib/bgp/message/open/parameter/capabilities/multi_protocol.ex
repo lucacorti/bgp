@@ -1,4 +1,4 @@
-defmodule BGP.Message.Open.Parameter.Capabilities.MultiProtocol do
+defmodule BGP.Message.OPEN.Parameter.Capabilities.MultiProtocol do
   @moduledoc false
 
   alias BGP.AFN

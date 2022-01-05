@@ -1,4 +1,4 @@
-defmodule BGP.Message.Update.Attribute.NextHop do
+defmodule BGP.Message.UPDATE.Attribute.NextHop do
   @moduledoc false
 
   alias BGP.Prefix

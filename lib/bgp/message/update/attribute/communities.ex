@@ -1,4 +1,4 @@
-defmodule BGP.Message.Update.Attribute.Communities do
+defmodule BGP.Message.UPDATE.Attribute.Communities do
   @moduledoc false
 
   @type community ::

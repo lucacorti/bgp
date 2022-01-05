@@ -1,4 +1,4 @@
-defmodule BGP.Message.Open.Parameter.Capabilities.ExtendedMessage do
+defmodule BGP.Message.OPEN.Parameter.Capabilities.ExtendedMessage do
   @moduledoc false
 
   @type t :: %__MODULE__{}

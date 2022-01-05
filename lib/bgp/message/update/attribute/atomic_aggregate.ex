@@ -1,4 +1,4 @@
-defmodule BGP.Message.Update.Attribute.AtomicAggregate do
+defmodule BGP.Message.UPDATE.Attribute.AtomicAggregate do
   @moduledoc false
 
   @type t :: %__MODULE__{}
