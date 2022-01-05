@@ -23,6 +23,9 @@ defmodule BGP.Message.NOTIFICATION do
       %__MODULE__{code: decode_code(code), subcode: decode_subcode(code, subcode), data: data}
     }
 
+  def decode(_notification, _options),
+    do: {:error, %Encoder.Error{code: :message_header, subcode: :bad_message_length}}
+
   @impl Encoder
   def encode(%__MODULE__{code: code, subcode: subcode, data: data}, _options),
     do: [<<encode_code(code)::8>>, <<encode_subcode(code, subcode)::8>>, <<data::binary>>]

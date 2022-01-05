@@ -36,7 +36,8 @@ defmodule BGP.Message.OPEN do
     end
   end
 
-  def decode(_data, _options), do: %Encoder.Error{code: :open_message}
+  def decode(_keepalive, _options),
+    do: {:error, %Encoder.Error{code: :message_header, subcode: :bad_message_length}}
 
   defp check_version(4), do: :ok
 

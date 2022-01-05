@@ -1,9 +1,9 @@
 defmodule BGP.Message do
   @moduledoc false
 
-  alias BGP.Message.{Encoder, KEEPALIVE, NOTIFICATION, OPEN, UPDATE}
+  alias BGP.Message.{Encoder, KEEPALIVE, NOTIFICATION, OPEN, UPDATE, ROUTEREFRESH}
 
-  @type t :: struct()
+  @type t :: KEEPALIVE.t() | NOTIFICATION.t() | OPEN.t() | UPDATE.t() | ROUTEREFRESH.t()
 
   @header_size 19
   @marker 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF
@@ -60,23 +60,23 @@ defmodule BGP.Message do
     {UPDATE, 2},
     {NOTIFICATION, 3},
     {KEEPALIVE, 4},
-    {ROUTE_REFRESH, 5}
+    {ROUTEREFRESH, 5}
   ]
 
-  for {module, code} <- @messages do
-    defp type_for_module(unquote(module)), do: unquote(code)
+  for {module, type} <- @messages do
+    defp type_for_module(unquote(module)), do: unquote(type)
   end
 
   defp type_for_module(module), do: raise("Unknown message module #{module}")
 
-  for {module, code} <- @messages do
-    defp module_for_type(unquote(code)), do: {:ok, unquote(module)}
+  for {module, type} <- @messages do
+    defp module_for_type(unquote(type)), do: {:ok, unquote(module)}
   end
 
-  defp module_for_type(code) do
+  defp module_for_type(type) do
     {
       :error,
-      %Encoder.Error{code: :message_header, subcode: :bad_message_type, data: <<code::8>>}
+      %Encoder.Error{code: :message_header, subcode: :bad_message_type, data: <<type::8>>}
     }
   end
 end

@@ -8,8 +8,11 @@ defmodule BGP.Message.KEEPALIVE do
   @behaviour Encoder
 
   @impl Encoder
-  def decode(_data, _options), do: {:ok, %__MODULE__{}}
+  def decode(<<>>, _options), do: {:ok, %__MODULE__{}}
+
+  def decode(_keepalive, _options),
+    do: {:error, %Encoder.Error{code: :message_header, subcode: :bad_message_length}}
 
   @impl Encoder
-  def encode(_msg, _options), do: <<>>
+  def encode(_keepalive, _options), do: <<>>
 end
