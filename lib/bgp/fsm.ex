@@ -32,15 +32,16 @@ defmodule BGP.FSM do
   @type state :: :idle | :active | :open_sent | :open_confirm | :established
 
   @type t :: %__MODULE__{
-          counters: keyword(counter()),
-          internal: boolean(),
-          options: Session.options(),
           asn: BGP.asn(),
           bgp_id: BGP.bgp_id(),
+          counters: keyword(counter()),
           delay_open: boolean(),
           delay_open_time: non_neg_integer(),
+          four_octets: boolean(),
           hold_time: BGP.hold_time(),
+          internal: boolean(),
           notification_without_open: boolean(),
+          options: Session.options(),
           state: state(),
           timers: keyword(Timer.t())
         }
@@ -56,10 +57,11 @@ defmodule BGP.FSM do
   ]
   defstruct asn: nil,
             bgp_id: nil,
+            counters: [connect_retry: 0],
             delay_open: nil,
             delay_open_time: nil,
+            four_octets: false,
             hold_time: nil,
-            counters: [connect_retry: 0],
             internal: false,
             notification_without_open: nil,
             options: [],
@@ -827,14 +829,29 @@ defmodule BGP.FSM do
       hold_time: fsm.hold_time,
       parameters: [
         %Capabilities{
-          capabilities: [%Capabilities.MultiProtocol{afi: :ipv4, safi: :nlri_unicast}]
+          capabilities: [
+            %Capabilities.FourOctetsASN{asn: fsm.asn},
+            %Capabilities.MultiProtocol{afi: :ipv4, safi: :nlri_unicast}
+          ]
         }
       ]
     }
   end
 
-  defp process_open(%__MODULE__{} = fsm, %Open{asn: asn}) do
-    %__MODULE__{fsm | internal: asn == fsm.asn}
+  defp process_open(%__MODULE__{} = fsm, %Open{} = open) do
+    {four_octets, asn} =
+      Enum.find_value(open.parameters, {false, open.asn}, fn
+        %Capabilities{capabilities: capabilities} ->
+          Enum.find_value(capabilities, fn
+            %Capabilities.FourOctetsASN{asn: asn} -> {true, asn}
+            _ -> nil
+          end)
+
+        _ ->
+          nil
+      end)
+
+    %__MODULE__{fsm | four_octets: four_octets, internal: asn == fsm.asn}
   end
 
   defp increment_counter(%__MODULE__{counters: counters} = fsm, name),

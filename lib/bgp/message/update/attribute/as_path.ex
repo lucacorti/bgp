@@ -13,19 +13,38 @@ defmodule BGP.Message.Update.Attribute.ASPath do
   @behaviour Encoder
 
   @impl Encoder
-  def decode(<<type::8, length::8, asns::binary>>, _options) do
-    {:ok, %__MODULE__{type: decode_type(type), length: length, value: decode_asns([], asns)}}
+  def decode(<<type::8, length::8, asns::binary>>, options) do
+    four_octets = Keyword.get(options, :four_octets, false)
+
+    {:ok,
+     %__MODULE__{
+       type: decode_type(type),
+       length: length,
+       value: decode_asns(asns, four_octets, [])
+     }}
   end
 
   defp decode_type(1), do: :as_set
   defp decode_type(2), do: :as_sequence
 
-  defp decode_asns(asns, <<>>), do: Enum.reverse(asns)
-  defp decode_asns(asns, <<asn::16, rest::binary>>), do: decode_asns([asn | asns], rest)
+  defp decode_asns(<<>>, _four_octets, asns), do: Enum.reverse(asns)
+
+  defp decode_asns(<<asn::32, rest::binary>>, true = four_octets, asns),
+    do: decode_asns(rest, four_octets, [asn | asns])
+
+  defp decode_asns(<<asn::16, rest::binary>>, false = four_octets, asns),
+    do: decode_asns(rest, four_octets, [asn | asns])
 
   @impl Encoder
-  def encode(%__MODULE__{type: type, length: length, value: value}, _options),
-    do: [<<encode_type(type)::8, length::8>>, Enum.map(value, &<<&1::16>>)]
+  def encode(%__MODULE__{type: type, length: length, value: value}, options) do
+    as_length =
+      Enum.find_value(options, 16, fn
+        {:four_octets, true} -> 32
+        _ -> nil
+      end)
+
+    [<<encode_type(type)::8, length::8>>, Enum.map(value, &<<&1::integer()-size(as_length)>>)]
+  end
 
   defp encode_type(:as_set), do: 1
   defp encode_type(:as_sequence), do: 2
