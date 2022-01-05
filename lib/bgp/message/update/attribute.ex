@@ -5,8 +5,11 @@ defmodule BGP.Message.Update.Attribute do
 
   alias BGP.Message.Update.Attribute.{
     Aggregator,
+    AS4Aggregator,
+    AS4Path,
     ASPath,
     AtomicAggregate,
+    Communities,
     LocalPref,
     MultiExitDisc,
     NextHop,
@@ -35,7 +38,10 @@ defmodule BGP.Message.Update.Attribute do
     {MultiExitDisc, 4},
     {LocalPref, 5},
     {AtomicAggregate, 6},
-    {Aggregator, 7}
+    {Aggregator, 7},
+    {Communities, 8},
+    {AS4Path, 17},
+    {AS4Aggregator, 18}
   ]
 
   for {module, code} <- @attributes do
