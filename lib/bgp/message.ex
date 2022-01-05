@@ -1,7 +1,7 @@
 defmodule BGP.Message do
   @moduledoc false
 
-  alias BGP.Message.{Encoder, KEEPALIVE, NOTIFICATION, OPEN, UPDATE, ROUTEREFRESH}
+  alias BGP.Message.{Encoder, KEEPALIVE, NOTIFICATION, OPEN, ROUTEREFRESH, UPDATE}
 
   @type t :: KEEPALIVE.t() | NOTIFICATION.t() | OPEN.t() | UPDATE.t() | ROUTEREFRESH.t()
 
