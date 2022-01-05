@@ -27,9 +27,10 @@ defmodule BGPTest do
   test "OPEN encode and decode" do
     asn = 100
     bgp_id = {127, 0, 0, 1}
+    hold_time = 90
 
-    assert {:ok, %OPEN{asn: ^asn, bgp_id: ^bgp_id, hold_time: 0}} =
-             %OPEN{asn: asn, bgp_id: bgp_id}
+    assert {:ok, %OPEN{asn: ^asn, bgp_id: ^bgp_id, hold_time: ^hold_time}} =
+             %OPEN{asn: asn, bgp_id: bgp_id, hold_time: hold_time}
              |> BGP.Message.encode([])
              |> IO.iodata_to_binary()
              |> BGP.Message.decode([])
