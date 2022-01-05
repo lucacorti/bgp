@@ -1,6 +1,7 @@
 defmodule BGP.Message.KEEPALIVE do
   @moduledoc false
 
+  @type t :: %__MODULE__{}
   defstruct []
 
   alias BGP.Message.Encoder
