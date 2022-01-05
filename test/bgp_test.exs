@@ -15,7 +15,7 @@ defmodule BGPTest do
   test "NOTIFICATION encode and decode" do
     code = :fsm
     subcode = :unspecific
-    data = ""
+    data = <<>>
 
     assert {:ok, %Notification{code: ^code, subcode: ^subcode, data: ^data}} =
              %Notification{code: code, subcode: subcode, data: data}

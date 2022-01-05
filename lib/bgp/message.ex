@@ -5,18 +5,21 @@ defmodule BGP.Message do
 
   @type t :: struct()
 
+  @header_size 19
   @marker 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF
+  @max_size 4_096
 
   @behaviour BGP.Message.Encoder
 
   @impl Encoder
-  def decode(<<@marker::128, _length::16, type::8, msg::binary>>, options),
-    do: module_for_type(type).decode(msg, options)
+  def decode(<<@marker::128, length::16, type::8, msg::binary>>, options)
+      when length >= @header_size and length <= @max_size,
+      do: module_for_type(type).decode(msg, options)
 
   @impl Encoder
   def encode(%module{} = message, options) do
     data = module.encode(message, options)
-    length = 19 + IO.iodata_length(data)
+    length = @header_size + IO.iodata_length(data)
     type = type_for_module(module)
 
     [<<@marker::128>>, <<length::16>>, <<type::8>>, data]
@@ -45,7 +48,8 @@ defmodule BGP.Message do
     {Open, 1},
     {Update, 2},
     {Notification, 3},
-    {KeepAlive, 4}
+    {KeepAlive, 4},
+    {RouteRefresh, 5}
   ]
 
   for {module, code} <- @messages do
