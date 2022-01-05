@@ -5,6 +5,8 @@ defmodule BGP.Message.OPEN do
   alias BGP.Message.OPEN.Parameter
   alias BGP.Prefix
 
+  @min_hold_time 3
+
   @type t :: %__MODULE__{
           asn: BGP.asn(),
           bgp_id: Prefix.t(),
@@ -54,7 +56,7 @@ defmodule BGP.Message.OPEN do
     }
   end
 
-  defp check_hold_time(hold_time) when hold_time > 2, do: :ok
+  defp check_hold_time(hold_time) when hold_time >= @min_hold_time, do: :ok
 
   defp check_hold_time(_hold_time) do
     {
