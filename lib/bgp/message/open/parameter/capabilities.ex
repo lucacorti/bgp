@@ -47,7 +47,8 @@ defmodule BGP.Message.OPEN.Parameter.Capabilities do
     {RouteRefresh, 2},
     {ExtendedMessage, 6},
     {GracefulRestart, 64},
-    {FourOctetsASN, 65}
+    {FourOctetsASN, 65},
+    {EnanchedRouteRefresh, 70}
   ]
 
   for {module, code} <- @attributes do

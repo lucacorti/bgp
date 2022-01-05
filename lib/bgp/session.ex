@@ -175,8 +175,6 @@ defmodule BGP.Session do
   end
 
   defp trigger_event(%{fsm: fsm} = state, event) do
-    Logger.debug("Triggering FSM event: #{inspect(event, pretty: true)}")
-
     with {:ok, fsm, effects} <- FSM.event(fsm, event),
          do: process_effects(%{state | fsm: fsm}, effects)
   end

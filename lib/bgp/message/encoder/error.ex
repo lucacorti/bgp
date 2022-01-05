@@ -42,7 +42,15 @@ defmodule BGP.Message.Encoder.Error do
           | :connection_collision_resolution
           | :out_of_resources
 
-  @type subcode :: message_header() | open_message() | update_message() | fsm() | :unspecific
+  @type route_refresh :: :invalid_message_length
+
+  @type subcode ::
+          message_header()
+          | open_message()
+          | route_refresh()
+          | update_message()
+          | fsm()
+          | :unspecific
 
   @type code ::
           :message_header
