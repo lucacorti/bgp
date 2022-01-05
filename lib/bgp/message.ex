@@ -12,7 +12,7 @@ defmodule BGP.Message do
   @behaviour BGP.Message.Encoder
 
   @impl Encoder
-  def decode(<<header::binary()-size(19), msg::binary>>, options) do
+  def decode(<<header::binary()-size(@header_size), msg::binary>>, options) do
     with {:ok, module} <- decode_header(header),
          do: module.decode(msg, options)
   end
