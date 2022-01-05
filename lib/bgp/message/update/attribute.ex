@@ -10,6 +10,7 @@ defmodule BGP.Message.Update.Attribute do
     ASPath,
     AtomicAggregate,
     Communities,
+    LargeCommunities,
     LocalPref,
     MultiExitDisc,
     NextHop,
@@ -41,7 +42,8 @@ defmodule BGP.Message.Update.Attribute do
     {Aggregator, 7},
     {Communities, 8},
     {AS4Path, 17},
-    {AS4Aggregator, 18}
+    {AS4Aggregator, 18},
+    {LargeCommunities, 32}
   ]
 
   for {module, code} <- @attributes do
