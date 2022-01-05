@@ -40,9 +40,9 @@ defmodule BGP.Message do
   @spec stream!(iodata()) :: Enumerable.t() | no_return()
   def stream!(data) do
     Stream.unfold(data, fn
-      <<@marker::@marker_size, length::16, type::8, _rest::binary>> = data
+      <<marker::@marker_size, length::16, type::8, _rest::binary>> = data
       when byte_size(data) >= length ->
-        case decode_header(<<@marker::@marker_size, length::16, type::8>>) do
+        case decode_header(<<marker::@marker_size, length::16, type::8>>) do
           {:ok, _module} ->
             msg_data = binary_part(data, 0, length)
             rest_size = byte_size(data) - length
