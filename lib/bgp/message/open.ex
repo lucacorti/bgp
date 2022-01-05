@@ -5,7 +5,9 @@ defmodule BGP.Message.OPEN do
   alias BGP.Message.OPEN.Parameter
   alias BGP.Prefix
 
-  @min_hold_time 3
+  @asn_min 1
+  @asn_max 65_535
+  @hold_time_min 3
 
   @type t :: %__MODULE__{
           asn: BGP.asn(),
@@ -24,8 +26,9 @@ defmodule BGP.Message.OPEN do
           params::binary()-size(params_length)>>,
         options
       ) do
-    with :ok <- check_version(version),
+    with :ok <- check_asn(asn),
          :ok <- check_hold_time(hold_time),
+         :ok <- check_version(version),
          {:ok, bgp_id} <-
            decode_bgp_id(bgp_id) do
       {
@@ -43,6 +46,30 @@ defmodule BGP.Message.OPEN do
   def decode(_keepalive, _options),
     do: {:error, %Encoder.Error{code: :message_header, subcode: :bad_message_length}}
 
+  defp check_asn(asn) when asn >= @asn_min and asn < @asn_max, do: :ok
+
+  defp check_asn(_asn) do
+    {
+      :error,
+      %Encoder.Error{
+        code: :open_message_error,
+        subcode: :bad_peer_as
+      }
+    }
+  end
+
+  defp check_hold_time(hold_time) when hold_time >= @hold_time_min, do: :ok
+
+  defp check_hold_time(_hold_time) do
+    {
+      :error,
+      %Encoder.Error{
+        code: :open_message_error,
+        subcode: :unacepptable_hold_time
+      }
+    }
+  end
+
   defp check_version(4), do: :ok
 
   defp check_version(version) do
@@ -52,18 +79,6 @@ defmodule BGP.Message.OPEN do
         code: :open_message_error,
         subcode: :unsupported_version_number,
         data: <<version::16>>
-      }
-    }
-  end
-
-  defp check_hold_time(hold_time) when hold_time >= @min_hold_time, do: :ok
-
-  defp check_hold_time(_hold_time) do
-    {
-      :error,
-      %Encoder.Error{
-        code: :open_message_error,
-        subcode: :unacepptable_hold_time
       }
     }
   end
