@@ -23,7 +23,9 @@ defmodule BGP.Message.OPEN do
         options
       ) do
     with :ok <- check_version(version),
-         {:ok, bgp_id} <- decode_bgp_id(bgp_id) do
+         :ok <- check_hold_time(hold_time),
+         {:ok, bgp_id} <-
+           decode_bgp_id(bgp_id) do
       {
         :ok,
         %__MODULE__{
@@ -41,14 +43,28 @@ defmodule BGP.Message.OPEN do
 
   defp check_version(4), do: :ok
 
-  defp check_version(version),
-    do:
-      {:error,
-       %Encoder.Error{
-         code: :open_message_error,
-         subcode: :unsupported_version_number,
-         data: <<version::16>>
-       }}
+  defp check_version(version) do
+    {
+      :error,
+      %Encoder.Error{
+        code: :open_message_error,
+        subcode: :unsupported_version_number,
+        data: <<version::16>>
+      }
+    }
+  end
+
+  defp check_hold_time(hold_time) when hold_time > 2, do: :ok
+
+  defp check_hold_time(_hold_time) do
+    {
+      :error,
+      %Encoder.Error{
+        code: :open_message_error,
+        subcode: :unacepptable_hold_time
+      }
+    }
+  end
 
   defp decode_bgp_id(bgp_id) do
     case Prefix.decode(bgp_id) do
