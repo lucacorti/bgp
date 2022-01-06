@@ -6,7 +6,7 @@ defmodule BGP.Message.NOTIFICATION do
   @type t :: %__MODULE__{
           code: Error.code(),
           subcode: Error.subcode(),
-          data: binary()
+          data: Error.data()
         }
 
   @enforce_keys [:code]

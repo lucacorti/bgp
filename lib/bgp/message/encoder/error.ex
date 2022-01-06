@@ -62,7 +62,9 @@ defmodule BGP.Message.Encoder.Error do
           | :fsm
           | :cease
 
-  @type t :: %__MODULE__{code: code(), subcode: subcode()}
+  @type data :: binary()
+
+  @type t :: %__MODULE__{code: code(), subcode: subcode(), data: data()}
   @enforce_keys [:code]
   defstruct code: nil, subcode: :unspecific, data: <<>>
 
