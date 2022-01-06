@@ -1,10 +1,10 @@
-defmodule BGP.FSM do
+defmodule BGP.Server.FSM do
   @moduledoc false
 
-  alias BGP.FSM.Timer
-  alias BGP.{Message, Session}
+  alias BGP.{Message, Server}
   alias BGP.Message.{KEEPALIVE, NOTIFICATION, OPEN, UPDATE}
   alias BGP.Message.OPEN.Parameter.Capabilities
+  alias BGP.Server.{FSM.Timer, Session}
 
   require Logger
 
@@ -77,8 +77,8 @@ defmodule BGP.FSM do
   def new(options),
     do:
       struct(__MODULE__,
-        asn: options[:asn],
-        bgp_id: options[:bgp_id],
+        asn: Server.get_config(options[:server], :asn),
+        bgp_id: Server.get_config(options[:server], :bgp_id),
         delay_open: options[:delay_open][:enabled],
         delay_open_time: options[:delay_open][:secs],
         hold_time: options[:hold_time][:secs],
@@ -823,6 +823,7 @@ defmodule BGP.FSM do
   end
 
   defp compose_msg(%__MODULE__{four_octets: four_octets}, msg) do
+    Logger.debug("FSM sending message: #{inspect(msg, pretty: true)}")
     Message.encode(msg, four_octets: four_octets)
   end
 

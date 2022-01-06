@@ -8,9 +8,15 @@ defmodule BGP.Application do
   @impl true
   def start(_type, _args) do
     children = [
-      {BGP.Session,
-       [asn: 65_000, bgp_id: "192.168.24.1", connect_retry: [secs: 5], host: "192.168.64.2"]}
+      {Registry, keys: :unique, name: BGP.Server.Session.Registry}
     ]
+
+    children =
+      if Mix.env() == :dev do
+        children ++ [{BGP.Server, server: BGP.MyServer}]
+      else
+        children
+      end
 
     Supervisor.start_link(children, strategy: :one_for_one, name: BGP.Supervisor)
   end

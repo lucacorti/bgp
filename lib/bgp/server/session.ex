@@ -1,12 +1,13 @@
-defmodule BGP.Session do
+defmodule BGP.Server.Session do
   @moduledoc """
   BGP Session
   """
 
   use Connection
 
-  alias BGP.{FSM, Message, Prefix}
+  alias BGP.{Message, Prefix}
   alias BGP.Message.Encoder
+  alias BGP.Server.FSM
 
   require Logger
 
@@ -24,8 +25,8 @@ defmodule BGP.Session do
                       default: true
                     ],
                     bgp_id: [
-                      doc: "Peer BGP Id, IP address as `:string`.",
-                      type: {:custom, Prefix, :parse, []},
+                      doc: "Peer BGP ID, IP address.",
+                      type: :string,
                       required: true
                     ],
                     connect_retry: [
@@ -72,6 +73,11 @@ defmodule BGP.Session do
                       doc: "Peer TCP port.",
                       type: :integer,
                       default: 179
+                    ],
+                    server: [
+                      doc: "BGP Server the peer refers to",
+                      type: :atom,
+                      required: true
                     ]
                   )
 
@@ -82,19 +88,18 @@ defmodule BGP.Session do
   """
   @type options() :: keyword()
 
-  def child_spec(opts) do
-    %{
-      id: __MODULE__,
-      start: {__MODULE__, :start_link, [opts]},
-      type: :worker,
-      restart: :permanent
-    }
-  end
+  def child_spec(opts), do: %{id: __MODULE__, start: {__MODULE__, :start_link, [opts]}}
 
   def start_link(args) do
-    with {:ok, options} <- NimbleOptions.validate(args, @options_schema),
-         do: Connection.start_link(__MODULE__, options, name: __MODULE__)
+    with {:ok, options} <- NimbleOptions.validate(args, @options_schema) do
+      Connection.start_link(__MODULE__, options,
+        name: via(options[:server], options[:asn], options[:bgp_id])
+      )
+    end
   end
+
+  defp via(server, asn, bgp_id),
+    do: {:via, Registry, {BGP.Server.Session.Registry, {server, asn, bgp_id}}}
 
   @spec manual_start(t()) :: :ok | {:error, :already_started}
   def manual_start(connection), do: Connection.call(connection, {{:start, :manual}})
@@ -117,7 +122,6 @@ defmodule BGP.Session do
   def connect(info, %{options: options} = state) do
     case :gen_tcp.connect(options[:host], options[:port], mode: :binary, active: :once) do
       {:ok, socket} ->
-        Logger.metadata(socket: socket)
         Logger.info("Connected on #{info}")
 
         trigger_event(%{state | socket: socket}, {:tcp_connection, :request_acked})
