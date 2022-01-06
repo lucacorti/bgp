@@ -52,6 +52,7 @@ defmodule BGP.Message.Encoder.Error do
           | route_refresh()
           | update_message()
           | fsm()
+          | cease()
           | :unspecific
 
   @type code ::
