@@ -48,39 +48,23 @@ defmodule BGP.Message.OPEN do
 
   defp check_asn(asn) when asn >= @asn_min and asn < @asn_max, do: :ok
 
-  defp check_asn(_asn) do
-    {
-      :error,
-      %Encoder.Error{
-        code: :open_message_error,
-        subcode: :bad_peer_as
-      }
-    }
-  end
+  defp check_asn(_asn),
+    do: {:error, %Encoder.Error{code: :open_message, subcode: :bad_peer_as}}
 
   defp check_hold_time(hold_time) when hold_time >= @hold_time_min, do: :ok
 
-  defp check_hold_time(_hold_time) do
-    {
-      :error,
-      %Encoder.Error{
-        code: :open_message_error,
-        subcode: :unacepptable_hold_time
-      }
-    }
-  end
+  defp check_hold_time(_hold_time),
+    do: {:error, %Encoder.Error{code: :open_message, subcode: :unacceptable_hold_time}}
 
   defp check_version(4), do: :ok
 
   defp check_version(version) do
-    {
-      :error,
-      %Encoder.Error{
-        code: :open_message_error,
-        subcode: :unsupported_version_number,
-        data: <<version::16>>
-      }
-    }
+    {:error,
+     %Encoder.Error{
+       code: :open_message,
+       subcode: :unsupported_version_number,
+       data: <<version::16>>
+     }}
   end
 
   defp decode_bgp_id(bgp_id) do
