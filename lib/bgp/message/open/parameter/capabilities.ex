@@ -29,7 +29,8 @@ defmodule BGP.Message.OPEN.Parameter.Capabilities do
          options
        ) do
     with {:ok, module} <- module_for_type(code),
-         do: decode_capabilities(rest, [module.decode(value, options) | capabilities], options)
+         {:ok, capability} <- module.decode(value, options),
+         do: decode_capabilities(rest, [capability | capabilities], options)
   end
 
   @impl Encoder
