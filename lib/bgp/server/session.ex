@@ -148,22 +148,20 @@ defmodule BGP.Server.Session do
       ) do
     :inet.setopts(socket, active: :once)
 
-    try do
-      (buffer <> data)
-      |> Message.stream!()
-      |> Enum.reduce({:noreply, state}, fn {rest, msg}, _return ->
-        with {:ok, fsm, effects} <- FSM.event(fsm, {:msg, msg, :recv}),
-             {:ok, state} <- process_effects(%{state | buffer: rest, fsm: fsm}, effects) do
-          {:noreply, state}
-        end
-      end)
-    catch
-      %Encoder.Error{} = error ->
-        data = Message.encode(Encoder.Error.to_notification(error), [])
+    (buffer <> data)
+    |> Message.stream!()
+    |> Enum.reduce({:noreply, state}, fn {rest, msg}, _return ->
+      with {:ok, fsm, effects} <- FSM.event(fsm, {:msg, msg, :recv}),
+           {:ok, state} <- process_effects(%{state | buffer: rest, fsm: fsm}, effects) do
+        {:noreply, state}
+      end
+    end)
+  catch
+    %Encoder.Error{} = error ->
+      data = Message.encode(Encoder.Error.to_notification(error), [])
 
-        with {:ok, state} <- process_effects(state, {:msg, data, :send}),
-             do: {:disconnect, error, state}
-    end
+      with {:ok, state} <- process_effects(state, {:msg, data, :send}),
+           do: {:disconnect, error, state}
   end
 
   def handle_info({:timer, _timer, :expires} = event, state) do

@@ -1,4 +1,6 @@
 defmodule BGP.Server.Listener do
+  @moduledoc false
+
   alias ThousandIsland.{Handler, Socket}
 
   use Handler
@@ -6,7 +8,7 @@ defmodule BGP.Server.Listener do
   alias BGP.Message
   alias BGP.Message.{Encoder, OPEN}
   alias BGP.Server
-  alias BGP.Server.{Session, FSM}
+  alias BGP.Server.{FSM, Session}
 
   require Logger
 
@@ -24,22 +26,20 @@ defmodule BGP.Server.Listener do
 
   @impl Handler
   def handle_data(data, socket, {socket, %{buffer: buffer, fsm: fsm} = state}) do
-    try do
-      (buffer <> data)
-      |> Message.stream!()
-      |> Enum.reduce({:continue, {socket, state}}, fn {rest, msg}, _return ->
-        with {:ok, fsm, effects} <- FSM.event(fsm, {:msg, msg, :recv}),
-             {:ok, state} <- process_effects(%{state | buffer: rest, fsm: fsm}, socket, effects) do
-          {:continue, {socket, state}}
-        end
-      end)
-    catch
-      %Encoder.Error{} = error ->
-        data = Message.encode(Encoder.Error.to_notification(error), [])
+    (buffer <> data)
+    |> Message.stream!()
+    |> Enum.reduce({:continue, {socket, state}}, fn {rest, msg}, _return ->
+      with {:ok, fsm, effects} <- FSM.event(fsm, {:msg, msg, :recv}),
+           {:ok, state} <- process_effects(%{state | buffer: rest, fsm: fsm}, socket, effects) do
+        {:continue, {socket, state}}
+      end
+    end)
+  catch
+    %Encoder.Error{} = error ->
+      data = Message.encode(Encoder.Error.to_notification(error), [])
 
-        with {:ok, state} <- process_effects(state, socket, {:msg, data, :send}),
-             do: {:close, {socket, state}}
-    end
+      with {:ok, state} <- process_effects(state, socket, {:msg, data, :send}),
+           do: {:close, {socket, state}}
   end
 
   defp process_effects(state, socket, effects) do
@@ -59,7 +59,7 @@ defmodule BGP.Server.Listener do
   defp process_effect(%{server: server}, _socket, {:msg, %OPEN{asn: asn, bgp_id: bgp_id}, :recv}) do
     case Session.session_for(server, asn) do
       {:ok, session} ->
-        with :ok <- Session.incoming_connection(session, bgp_id), do: :ok
+        Session.incoming_connection(session, bgp_id)
 
       {:error, :not_found} ->
         :close
