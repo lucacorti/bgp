@@ -37,4 +37,13 @@ defmodule BGP.Prefix do
       address -> {:ok, Kernel.to_string(address)}
     end
   end
+
+  @spec to_integer(t()) :: non_neg_integer()
+  def to_integer({a, b, c, d}),
+    do: Bitwise.<<<(a, 24) + Bitwise.<<<(b, 16) + Bitwise.<<<(c, 8) + d
+
+  def to_integer({a, b, c, d, e, f, g, h}),
+    do:
+      Bitwise.<<<(a, 112) + Bitwise.<<<(b, 96) + Bitwise.<<<(c, 80) + Bitwise.<<<(d, 64) +
+        Bitwise.<<<(e, 48) + Bitwise.<<<(f, 32) + Bitwise.<<<(g, 16) + h
 end

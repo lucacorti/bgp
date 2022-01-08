@@ -5,7 +5,7 @@ defmodule BGP.Server.Session do
 
   use Connection
 
-  alias BGP.{Message, Prefix}
+  alias BGP.{Message, Prefix, Server}
   alias BGP.Message.Encoder
   alias BGP.Server.FSM
 
@@ -62,12 +62,12 @@ defmodule BGP.Server.Session do
 
   def start_link(args) do
     with {:ok, options} <- NimbleOptions.validate(args, @options_schema) do
-      Connection.start_link(__MODULE__, options, name: via(options[:server], options[:asn]))
+      Connection.start_link(__MODULE__, options, name: via(options[:server], options[:host]))
     end
   end
 
-  defp via(server, asn),
-    do: {:via, Registry, {BGP.Server.Session.Registry, {server, asn}}}
+  defp via(server, host),
+    do: {:via, Registry, {BGP.Server.Session.Registry, {server, host}}}
 
   @spec incoming_connection(t(), BGP.bgp_id()) :: :ok | {:error, :collision}
   def incoming_connection(session, bgp_id),
@@ -79,9 +79,10 @@ defmodule BGP.Server.Session do
   @spec manual_stop(t()) :: :ok | {:error, :already_stopped}
   def manual_stop(session), do: Connection.call(session, {:stop, :manual})
 
-  @spec session_for(BGP.Server.t(), BGP.asn()) :: {:ok, GenServer.server()} | {:error, :not_found}
-  def session_for(server, asn) do
-    case Registry.lookup(BGP.Server.Session.Registry, {server, asn}) do
+  @spec session_for(BGP.Server.t(), Prefix.t()) ::
+          {:ok, GenServer.server()} | {:error, :not_found}
+  def session_for(server, host) do
+    case Registry.lookup(BGP.Server.Session.Registry, {server, host}) do
       [] -> {:error, :not_found}
       [{pid, _value}] -> {:ok, pid}
     end
@@ -122,8 +123,18 @@ defmodule BGP.Server.Session do
   end
 
   @impl Connection
-  def handle_call({:incoming_connection, _bgp_id}, _from, state) do
-    {:reply, :ok, state}
+  def handle_call({:incoming_connection, peer_bgp_id}, _from, %{options: options} = state) do
+    server_bgp_id =
+      options
+      |> Keyword.get(:server)
+      |> Server.get_config(:bgp_id)
+
+    if server_bgp_id > peer_bgp_id do
+      {:reply, {:error, :collision}, state}
+    else
+      with {:ok, state} <- trigger_event(state, {:open, :collision_dump}),
+           do: {:reply, :ok, state}
+    end
   end
 
   def handle_call({:start, :manual}, _from, %{options: options} = state) do

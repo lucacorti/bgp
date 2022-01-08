@@ -51,6 +51,8 @@ defmodule BGP.Server.Listener do
   end
 
   defp trigger_event(%{fsm: fsm} = state, socket, event) do
+    Logger.warn("Triggering FSM event: #{inspect(event)}")
+
     with {:ok, fsm, effects} <- FSM.event(fsm, event),
          do: process_effects(%{state | fsm: fsm}, socket, effects)
   end
@@ -63,19 +65,22 @@ defmodule BGP.Server.Listener do
         :ok ->
           return
 
-        action ->
+        {action, _reason} ->
           {action, state}
       end
     end)
   end
 
-  defp process_effect(%{server: server}, _socket, {:msg, %OPEN{asn: asn, bgp_id: bgp_id}, :recv}) do
-    case Session.session_for(server, asn) do
-      {:ok, session} ->
-        Session.incoming_connection(session, bgp_id)
+  defp process_effect(%{server: server} = state, socket, {:msg, %OPEN{bgp_id: bgp_id}, :recv}) do
+    %{address: address} = Socket.peer_info(socket)
 
-      {:error, :not_found} ->
-        :close
+    with {:ok, session} <- Session.session_for(server, address),
+         :ok <- Session.incoming_connection(session, bgp_id) do
+      :ok
+    else
+      {:error, _reason} ->
+        with {:ok, state} <- trigger_event(state, socket, {:open, :collision_dump}),
+             do: {:noreply, {socket, state}}
     end
   end
 
@@ -88,5 +93,5 @@ defmodule BGP.Server.Listener do
     end
   end
 
-  defp process_effect(_state, _socket, {:tcp_connection, :disconnect}), do: :close
+  defp process_effect(_state, _socket, {:tcp_connection, :disconnect}), do: {:close, :disconnect}
 end
