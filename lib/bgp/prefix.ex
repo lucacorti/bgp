@@ -20,16 +20,21 @@ defmodule BGP.Prefix do
 
   def encode(_address), do: :error
 
-  @spec parse(String.t()) :: {:ok, t()} | {:error, any()}
+  @spec parse(String.t()) :: {:ok, t()} | {:error, :invalid}
   def parse(address) do
     case address
          |> String.to_charlist()
          |> :inet.parse_address() do
-      {:ok, prefix} ->
-        {:ok, prefix}
+      {:ok, prefix} -> {:ok, prefix}
+      {:error, :einval} -> {:error, :invalid}
+    end
+  end
 
-      {:error, :einval} ->
-        {:error, "'#{address}' is not a valid IP address"}
+  @spec to_string(t()) :: {:ok, String.t()} | {:error, :invalid}
+  def to_string(prefix) do
+    case :inet.ntoa(prefix) do
+      {:error, :einval} -> {:error, :invalid}
+      address -> {:ok, Kernel.to_string(address)}
     end
   end
 end
