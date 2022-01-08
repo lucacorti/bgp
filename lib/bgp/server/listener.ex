@@ -19,12 +19,12 @@ defmodule BGP.Server.Listener do
   end
 
   @impl Handler
-  def handle_connection(%Socket{socket: tcp_socket} = socket, server: server) do
+  def handle_connection(socket, server: server) do
     fsm = FSM.new(Server.get_config(server))
     state = %{buffer: <<>>, fsm: fsm, server: server}
+    %{address: address} = Socket.peer_info(socket)
 
-    with {:ok, {address, _port}} <- :inet.peername(tcp_socket),
-         {:ok, _peer} <- Server.get_peer(server, address),
+    with {:ok, _peer} <- Server.get_peer(server, address),
          {:ok, fsm, effects} <- FSM.event(fsm, {:start, :automatic, :passive}),
          {:ok, state} <- process_effects(state, socket, effects),
          {:ok, fsm, effects} <- FSM.event(fsm, {:tcp_connection, :confirmed}),
