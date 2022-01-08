@@ -12,12 +12,6 @@ defmodule BGP.Server.Listener do
 
   require Logger
 
-  @impl GenServer
-  def handle_info({:timer, _timer, :expires} = event, {socket, state}) do
-    with {:ok, state} <- trigger_event(state, socket, event),
-         do: {:noreply, {socket, state}}
-  end
-
   @impl Handler
   def handle_connection(socket, server: server) do
     fsm = FSM.new(Server.get_config(server))
@@ -48,6 +42,12 @@ defmodule BGP.Server.Listener do
 
       with {:ok, state} <- process_effects(state, socket, {:msg, data, :send}),
            do: {:close, {socket, state}}
+  end
+
+  @impl GenServer
+  def handle_info({:timer, _timer, :expires} = event, {socket, state}) do
+    with {:ok, state} <- trigger_event(state, socket, event),
+         do: {:noreply, {socket, state}}
   end
 
   defp trigger_event(%{fsm: fsm} = state, socket, event) do
