@@ -27,7 +27,7 @@ defmodule BGP.Server.Listener do
   def handle_data(data, socket, %{buffer: buffer} = state) do
     (buffer <> data)
     |> Message.stream!()
-    |> Enum.reduce({:continue, state}, fn {rest, msg}, _return ->
+    |> Enum.reduce({:continue, state}, fn {rest, msg}, {:continue, state} ->
       with {:ok, state} <- trigger_event(state, socket, {:msg, msg, :recv}),
            do: {:continue, %{state | buffer: rest}}
     end)
