@@ -51,7 +51,7 @@ defmodule BGP.Message.OPEN do
   defp check_asn(_asn),
     do: {:error, %Encoder.Error{code: :open_message, subcode: :bad_peer_as}}
 
-  defp check_hold_time(hold_time) when hold_time >= @hold_time_min, do: :ok
+  defp check_hold_time(hold_time) when hold_time == 0 or hold_time >= @hold_time_min, do: :ok
 
   defp check_hold_time(_hold_time),
     do: {:error, %Encoder.Error{code: :open_message, subcode: :unacceptable_hold_time}}
