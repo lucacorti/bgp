@@ -68,13 +68,22 @@ defmodule BGP.Server.Listener do
   defp process_effect(%{server: server} = state, socket, {:msg, %OPEN{bgp_id: bgp_id}, :recv}) do
     %{address: address} = Socket.peer_info(socket)
 
-    with {:ok, session} <- Session.session_for(server, address),
-         :ok <- Session.incoming_connection(session, bgp_id) do
-      :ok
-    else
-      {:error, _} ->
-        with {:ok, _state} <- trigger_event(state, socket, {:open, :collision_dump}),
-             do: {:close, :collision}
+    case Session.session_for(server, address) do
+      {:ok, session} ->
+        case Session.incoming_connection(session, bgp_id) do
+          :ok ->
+            :ok
+
+          {:error, :collision} ->
+            Logger.warn("Connection from peer #{address} collides, closing")
+
+            with {:ok, _state} <- trigger_event(state, socket, {:open, :collision_dump}),
+                 do: {:close, :collision}
+        end
+
+      {:error, :not_found} ->
+        Logger.warn("No configured session for peer #{address}, closing")
+        {:close, :no_session}
     end
   end
 

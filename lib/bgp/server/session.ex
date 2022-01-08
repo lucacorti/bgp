@@ -70,8 +70,8 @@ defmodule BGP.Server.Session do
     do: {:via, Registry, {BGP.Server.Session.Registry, {server, host}}}
 
   @spec incoming_connection(t(), BGP.bgp_id()) :: :ok | {:error, :collision}
-  def incoming_connection(session, bgp_id),
-    do: Connection.call(session, {:incoming_connection, bgp_id})
+  def incoming_connection(session, peer_bgp_id),
+    do: Connection.call(session, {:incoming_connection, peer_bgp_id})
 
   @spec manual_start(t()) :: :ok | {:error, :already_started}
   def manual_start(session), do: Connection.call(session, {:start, :manual})
