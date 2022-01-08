@@ -170,9 +170,8 @@ defmodule BGP.Server.Session do
   catch
     %Encoder.Error{} = error ->
       data = Message.encode(Encoder.Error.to_notification(error), [])
-
-      with {:ok, state} <- process_effects(state, {:msg, data, :send}),
-           do: {:disconnect, error, state}
+      process_effect(state, {:msg, data, :send})
+      {:disconnect, error, state}
   end
 
   def handle_info({:timer, _timer, :expires} = event, state) do

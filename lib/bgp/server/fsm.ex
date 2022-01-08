@@ -213,7 +213,7 @@ defmodule BGP.Server.FSM do
         fsm =
           if hold_time > 0 do
             fsm
-            |> restart_timer(:keep_alive)
+            |> restart_timer(:keep_alive, div(hold_time, 3))
             |> restart_timer(:hold_time, hold_time)
           else
             fsm
@@ -368,14 +368,13 @@ defmodule BGP.Server.FSM do
 
   defp process_event(%__MODULE__{state: :active} = fsm, {:msg, msg, :recv}) do
     delay_open_running = timer_running?(fsm, :delay_open)
-    hold_timer_nonzero = timer_seconds(fsm, :hold_time) != 0
 
     case decode_msg(fsm, msg) do
       {:ok, %OPEN{hold_time: hold_time} = open} when delay_open_running ->
         fsm =
-          if hold_timer_nonzero do
+          if hold_time > 0 do
             fsm
-            |> restart_timer(:keep_alive)
+            |> restart_timer(:keep_alive, div(hold_time, 3))
             |> restart_timer(:hold_time, hold_time)
           else
             fsm
@@ -503,7 +502,7 @@ defmodule BGP.Server.FSM do
           |> process_open(open)
           |> set_timer(:delay_open, 0)
           |> set_timer(:connect_retry, 0)
-          |> restart_timer(:keep_alive)
+          |> restart_timer(:keep_alive, div(hold_time, 3))
           |> restart_timer(:hold_time, hold_time),
           [
             {:msg, open, :recv},
@@ -898,7 +897,4 @@ defmodule BGP.Server.FSM do
 
   defp timer_running?(%__MODULE__{timers: timers}, name),
     do: Timer.running?(get_in(timers, [name]))
-
-  defp timer_seconds(%__MODULE__{timers: timers}, name),
-    do: Timer.seconds(get_in(timers, [name]))
 end

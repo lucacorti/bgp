@@ -14,34 +14,28 @@ defmodule BGP.Server.Listener do
 
   @impl Handler
   def handle_connection(socket, server: server) do
-    fsm = FSM.new(Server.get_config(server))
-    state = %{buffer: <<>>, fsm: fsm, server: server}
+    state = %{buffer: <<>>, fsm: FSM.new(Server.get_config(server)), server: server}
     %{address: address} = Socket.peer_info(socket)
 
     with {:ok, _peer} <- Server.get_peer(server, address),
-         {:ok, fsm, effects} <- FSM.event(fsm, {:start, :automatic, :passive}),
-         {:ok, state} <- process_effects(state, socket, effects),
-         {:ok, fsm, effects} <- FSM.event(fsm, {:tcp_connection, :confirmed}),
-         {:ok, state} <- process_effects(%{state | fsm: fsm}, socket, effects),
-         do: {:continue, {socket, state}}
+         {:ok, state} <- trigger_event(state, socket, {:start, :automatic, :passive}),
+         {:ok, state} <- trigger_event(state, socket, {:tcp_connection, :confirmed}),
+         do: {:continue, state}
   end
 
   @impl Handler
-  def handle_data(data, socket, {socket, %{buffer: buffer, fsm: fsm} = state}) do
+  def handle_data(data, socket, %{buffer: buffer} = state) do
     (buffer <> data)
     |> Message.stream!()
-    |> Enum.reduce({:continue, {socket, state}}, fn {rest, msg}, _return ->
-      with {:ok, fsm, effects} <- FSM.event(fsm, {:msg, msg, :recv}),
-           {:ok, state} <- process_effects(%{state | buffer: rest, fsm: fsm}, socket, effects) do
-        {:continue, {socket, state}}
-      end
+    |> Enum.reduce({:continue, state}, fn {rest, msg}, _return ->
+      with {:ok, state} <- trigger_event(state, socket, {:msg, msg, :recv}),
+           do: {:continue, %{state | buffer: rest}}
     end)
   catch
     %Encoder.Error{} = error ->
       data = Message.encode(Encoder.Error.to_notification(error), [])
-
-      with {:ok, state} <- process_effects(state, socket, {:msg, data, :send}),
-           do: {:close, {socket, state}}
+      process_effect(state, socket, {:msg, data, :send})
+      {:close, state}
   end
 
   @impl GenServer
@@ -78,10 +72,7 @@ defmodule BGP.Server.Listener do
          :ok <- Session.incoming_connection(session, bgp_id) do
       :ok
     else
-      {:error, :not_found} ->
-        :ok
-
-      {:error, :collision} ->
+      {:error, _} ->
         with {:ok, _state} <- trigger_event(state, socket, {:open, :collision_dump}),
              do: {:close, :collision}
     end
