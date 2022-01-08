@@ -51,14 +51,14 @@ defmodule BGP.Server.Listener do
   end
 
   defp trigger_event(%{fsm: fsm} = state, socket, event) do
-    Logger.warn("Triggering FSM event: #{inspect(event)}")
+    Logger.debug("LISTENER: Triggering FSM event: #{inspect(event)}")
 
     with {:ok, fsm, effects} <- FSM.event(fsm, event),
          do: process_effects(%{state | fsm: fsm}, socket, effects)
   end
 
   defp process_effects(state, socket, effects) do
-    Logger.warn("Processing FSM effects: #{inspect(effects)}")
+    Logger.debug("LISTENER: Processing FSM effects: #{inspect(effects)}")
 
     Enum.reduce(effects, {:ok, state}, fn effect, return ->
       case process_effect(state, socket, effect) do
@@ -78,9 +78,12 @@ defmodule BGP.Server.Listener do
          :ok <- Session.incoming_connection(session, bgp_id) do
       :ok
     else
-      {:error, _reason} ->
-        with {:ok, state} <- trigger_event(state, socket, {:open, :collision_dump}),
-             do: {:noreply, {socket, state}}
+      {:error, :not_found} ->
+        :ok
+
+      {:error, :collision} ->
+        with {:ok, _state} <- trigger_event(state, socket, {:open, :collision_dump}),
+             do: {:close, :collision}
     end
   end
 
