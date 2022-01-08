@@ -25,6 +25,7 @@ defmodule BGP.MixProject do
     [
       {:connection, "~> 1.0"},
       {:nimble_options, "~> 0.4"},
+      {:thousand_island, "~> 0.5"},
       {:credo, "~> 1.0", only: :dev, runtime: false},
       {:dialyxir, "~> 1.0", only: :dev, runtime: false},
       {:ex_doc, "~> 0.26", only: :dev, runtime: false}

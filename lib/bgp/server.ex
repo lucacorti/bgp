@@ -18,6 +18,36 @@ defmodule BGP.Server do
                       type: {:custom, Prefix, :parse, []},
                       required: true
                     ],
+                    connect_retry: [
+                      type: :keyword_list,
+                      keys: [
+                        secs: [doc: "Connect Retry timer seconds.", type: :non_neg_integer]
+                      ],
+                      default: [secs: 120]
+                    ],
+                    delay_open: [
+                      type: :keyword_list,
+                      keys: [
+                        enabled: [doc: "Enable Delay OPEN.", type: :boolean],
+                        secs: [doc: "Delay OPEN timer seconds.", type: :non_neg_integer]
+                      ],
+                      default: [enabled: true, secs: 5]
+                    ],
+                    hold_time: [
+                      type: :keyword_list,
+                      keys: [secs: [doc: "Hold Time timer seconds.", type: :non_neg_integer]],
+                      default: [secs: 90]
+                    ],
+                    keep_alive: [
+                      type: :keyword_list,
+                      keys: [secs: [doc: "Keep Alive timer seconds.", type: :non_neg_integer]],
+                      default: [secs: 30]
+                    ],
+                    notification_without_open: [
+                      doc: "Allows NOTIFICATIONS to be received without OPEN first",
+                      type: :boolean,
+                      default: true
+                    ],
                     peers: [
                       doc: "List peer configurations",
                       type: {:list, :keyword_list},
@@ -44,7 +74,6 @@ defmodule BGP.Server do
     options =
       server
       |> get_config()
-      |> Keyword.put(:server, server)
 
     Supervisor.start_link(__MODULE__, options, name: server)
   end
@@ -54,6 +83,7 @@ defmodule BGP.Server do
     server.__otp_app__
     |> Application.get_env(server, [])
     |> NimbleOptions.validate!(@options_schema)
+    |> Keyword.put(:server, server)
   end
 
   @spec get_config(t(), atom()) :: keyword()
@@ -65,11 +95,17 @@ defmodule BGP.Server do
 
   @impl Supervisor
   def init(args) do
-    common = Keyword.take(args, [:server])
+    server = Keyword.take(args, [:server])
 
     peers =
-      Enum.map(args[:peers], fn peer -> {BGP.Server.Session, Keyword.merge(peer, common)} end)
+      Enum.map(args[:peers], fn peer -> {BGP.Server.Session, Keyword.merge(peer, server)} end)
 
-    Supervisor.init(peers, strategy: :one_for_all)
+    Supervisor.init(
+      [
+        {ThousandIsland, port: 179, handler_module: BGP.Server.Listener, handler_options: server}
+        | peers
+      ],
+      strategy: :one_for_all
+    )
   end
 end

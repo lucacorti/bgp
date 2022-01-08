@@ -14,55 +14,25 @@ defmodule BGP.Server.Session do
   @type t :: GenServer.server()
 
   @options_schema NimbleOptions.new!(
-                    asn: [
-                      doc: "Peer Autonomous System Number.",
-                      type: :pos_integer,
-                      default: 23_456
-                    ],
                     automatic: [
                       doc: "Automatically start the peering session.",
                       type: :boolean,
                       default: true
+                    ],
+                    asn: [
+                      doc: "Peer Autonomous System Number.",
+                      type: :pos_integer,
+                      default: 23_456
                     ],
                     bgp_id: [
                       doc: "Peer BGP ID, IP address.",
                       type: :string,
                       required: true
                     ],
-                    connect_retry: [
-                      type: :keyword_list,
-                      keys: [
-                        secs: [doc: "Connect Retry timer seconds.", type: :non_neg_integer]
-                      ],
-                      default: [secs: 120]
-                    ],
-                    delay_open: [
-                      type: :keyword_list,
-                      keys: [
-                        enabled: [doc: "Enable Delay OPEN.", type: :boolean],
-                        secs: [doc: "Delay OPEN timer seconds.", type: :non_neg_integer]
-                      ],
-                      default: [enabled: true, secs: 5]
-                    ],
-                    hold_time: [
-                      type: :keyword_list,
-                      keys: [secs: [doc: "Hold Time timer seconds.", type: :non_neg_integer]],
-                      default: [secs: 90]
-                    ],
-                    keep_alive: [
-                      type: :keyword_list,
-                      keys: [secs: [doc: "Keep Alive timer seconds.", type: :non_neg_integer]],
-                      default: [secs: 30]
-                    ],
                     host: [
                       doc: "Peer IP address as `:string`.",
                       type: {:custom, Prefix, :parse, []},
                       required: true
-                    ],
-                    notification_without_open: [
-                      doc: "Allows NOTIFICATIONS to be received without OPEN first",
-                      type: :boolean,
-                      default: true
                     ],
                     mode: [
                       doc: "Actively connects to the peer or just waits for a connection",
@@ -92,20 +62,30 @@ defmodule BGP.Server.Session do
 
   def start_link(args) do
     with {:ok, options} <- NimbleOptions.validate(args, @options_schema) do
-      Connection.start_link(__MODULE__, options,
-        name: via(options[:server], options[:asn], options[:bgp_id])
-      )
+      Connection.start_link(__MODULE__, options, name: via(options[:server], options[:asn]))
     end
   end
 
-  defp via(server, asn, bgp_id),
-    do: {:via, Registry, {BGP.Server.Session.Registry, {server, asn, bgp_id}}}
+  defp via(server, asn),
+    do: {:via, Registry, {BGP.Server.Session.Registry, {server, asn}}}
+
+  @spec incoming_connection(t(), BGP.bgp_id()) :: :ok | {:error, :collision}
+  def incoming_connection(session, bgp_id),
+    do: Connection.call(session, {:incoming_connection, bgp_id})
 
   @spec manual_start(t()) :: :ok | {:error, :already_started}
-  def manual_start(connection), do: Connection.call(connection, {{:start, :manual}})
+  def manual_start(session), do: Connection.call(session, {:start, :manual})
 
   @spec manual_stop(t()) :: :ok | {:error, :already_stopped}
-  def manual_stop(connection), do: Connection.call(connection, {{:stop, :manual}})
+  def manual_stop(session), do: Connection.call(session, {:stop, :manual})
+
+  @spec session_for(BGP.Server.t(), BGP.asn()) :: {:ok, GenServer.server()} | {:error, :not_found}
+  def session_for(server, asn) do
+    case Registry.lookup(BGP.Server.Session.Registry, {server, asn}) do
+      [] -> {:error, :not_found}
+      [{pid, _value}] -> {:ok, pid}
+    end
+  end
 
   @impl Connection
   def init(options) do
@@ -142,12 +122,16 @@ defmodule BGP.Server.Session do
   end
 
   @impl Connection
-  def handle_call({{:start, :manual}}, _from, %{options: options} = state) do
+  def handle_call({:incoming_connection, _bgp_id}, _from, state) do
+    {:reply, :ok, state}
+  end
+
+  def handle_call({:start, :manual}, _from, %{options: options} = state) do
     with {:ok, state} <- trigger_event(state, {:start, :manual, options[:mode]}),
          do: {:reply, :ok, state}
   end
 
-  def handle_call({{:stop, :manual}}, _from, state) do
+  def handle_call({:stop, :manual}, _from, state) do
     with {:ok, state} <- trigger_event(state, {:stop, :manual}),
          do: {:reply, :ok, state}
   end
