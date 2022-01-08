@@ -1,4 +1,7 @@
 # BGP
+A work-in-progress Border Gateway Protocol (BGP) implementation in Elixir.
+
+[![CI](https://github.com/lucacorti/bgp/actions/workflows/test.yml/badge.svg)](https://github.com/lucacorti/bgp/actions/workflows/test.yml)
 
 **TODO: Add description**
 
