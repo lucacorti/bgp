@@ -8,7 +8,8 @@ defmodule BGP.Application do
   @impl true
   def start(_type, _args) do
     children = [
-      {Registry, keys: :unique, name: BGP.Server.Session.Registry}
+      {Registry, keys: :unique, name: BGP.Server.Session.Registry},
+      {Registry, keys: :unique, name: BGP.Server.Listener.Registry}
     ]
 
     children =

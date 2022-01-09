@@ -6,8 +6,8 @@ defmodule BGP.Server.Session do
   use Connection
 
   alias BGP.{Message, Prefix, Server}
-  alias BGP.Message.Encoder
-  alias BGP.Server.FSM
+  alias BGP.Message.{Encoder, OPEN}
+  alias BGP.Server.{FSM, Listener}
 
   require Logger
 
@@ -132,6 +132,8 @@ defmodule BGP.Server.Session do
     if server_bgp_id > peer_bgp_id do
       {:reply, {:error, :collision}, state}
     else
+      Logger.warn("CONNECTION: closing connection to peer due to collision")
+
       with {:ok, state} <- trigger_event(state, {:open, :collision_dump}),
            do: {:reply, :ok, state}
     end
@@ -194,6 +196,32 @@ defmodule BGP.Server.Session do
           {action, reason, state}
       end
     end)
+  end
+
+  defp process_effect(
+         %{options: options, socket: socket} = state,
+         {:msg, %OPEN{bgp_id: bgp_id}, :recv}
+       ) do
+    server = Keyword.get(options, :server)
+    {:ok, {address, _port}} = :inet.peername(socket)
+
+    case Listener.connection_for(server, address) do
+      {:ok, connection} ->
+        case Listener.outbound_connection(connection, bgp_id) do
+          :ok ->
+            :ok
+
+          {:error, :collision} ->
+            Logger.warn("Connection to peer #{inspect(address)} collides, closing")
+
+            with {:ok, _state} <- trigger_event(state, {:open, :collision_dump}),
+                 do: {:close, :collision}
+        end
+
+      {:error, :not_found} ->
+        Logger.warn("No outbound connection to peer #{inspect(address)}")
+        :ok
+    end
   end
 
   defp process_effect(_state, {:msg, _msg, :recv}), do: :ok
