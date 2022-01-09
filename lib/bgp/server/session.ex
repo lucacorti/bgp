@@ -209,6 +209,7 @@ defmodule BGP.Server.Session do
       {:ok, connection} ->
         case Listener.outbound_connection(connection, bgp_id) do
           :ok ->
+            Logger.debug("No collision, keeping connection to peer #{address}")
             :ok
 
           {:error, :collision} ->
@@ -219,7 +220,7 @@ defmodule BGP.Server.Session do
         end
 
       {:error, :not_found} ->
-        Logger.warn("No outbound connection to peer #{inspect(address)}")
+        Logger.debug("No inbound connection from peer #{inspect(address)}")
         :ok
     end
   end

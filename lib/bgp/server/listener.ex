@@ -131,17 +131,18 @@ defmodule BGP.Server.Listener do
       {:ok, session} ->
         case Session.incoming_connection(session, bgp_id) do
           :ok ->
+            Logger.debug("No collision, keeping connection from peer #{inspect(address)}")
             :ok
 
           {:error, :collision} ->
-            Logger.warn("Connection from peer #{address} collides, closing")
+            Logger.warn("Connection from peer #{inspect(address)} collides, closing")
 
             with {:ok, _state} <- trigger_event(state, socket, {:open, :collision_dump}),
                  do: {:close, :collision}
         end
 
       {:error, :not_found} ->
-        Logger.warn("No configured session for peer #{address}, closing")
+        Logger.warn("No configured session for peer #{inspect(address)}, closing")
         {:close, :no_session}
     end
   end
