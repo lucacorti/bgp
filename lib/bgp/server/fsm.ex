@@ -206,10 +206,10 @@ defmodule BGP.Server.FSM do
   end
 
   defp process_event(%__MODULE__{state: :connect} = fsm, {:msg, msg, :recv}) do
-    delay_open_running = timer_running?(fsm, :delay_open)
+    delay_open_timer_running = timer_running?(fsm, :delay_open)
 
     case decode_msg(fsm, msg) do
-      {:ok, %OPEN{hold_time: hold_time} = open} when delay_open_running ->
+      {:ok, %OPEN{hold_time: hold_time} = open} when delay_open_timer_running ->
         fsm =
           if hold_time > 0 do
             fsm
@@ -236,7 +236,7 @@ defmodule BGP.Server.FSM do
           ]
         }
 
-      {:ok, %NOTIFICATION{code: :unsupported_version_number}} when delay_open_running ->
+      {:ok, %NOTIFICATION{code: :unsupported_version_number}} when delay_open_timer_running ->
         {
           :ok,
           %__MODULE__{fsm | state: :idle}
@@ -367,10 +367,10 @@ defmodule BGP.Server.FSM do
     }
 
   defp process_event(%__MODULE__{state: :active} = fsm, {:msg, msg, :recv}) do
-    delay_open_running = timer_running?(fsm, :delay_open)
+    delay_open_timer_running = timer_running?(fsm, :delay_open)
 
     case decode_msg(fsm, msg) do
-      {:ok, %OPEN{hold_time: hold_time} = open} when delay_open_running ->
+      {:ok, %OPEN{hold_time: hold_time} = open} when delay_open_timer_running ->
         fsm =
           if hold_time > 0 do
             fsm
@@ -397,7 +397,7 @@ defmodule BGP.Server.FSM do
           ]
         }
 
-      {:ok, %NOTIFICATION{code: :unsupported_version_number}} when delay_open_running ->
+      {:ok, %NOTIFICATION{code: :unsupported_version_number}} when delay_open_timer_running ->
         {
           :ok,
           %__MODULE__{fsm | state: :idle}
@@ -875,11 +875,8 @@ defmodule BGP.Server.FSM do
     do: %__MODULE__{fsm | counters: update_in(counters, [name], fn _ -> 0 end)}
 
   defp set_timer(%__MODULE__{options: options, timers: timers} = fsm, name, value \\ nil) do
-    %__MODULE__{
-      fsm
-      | timers:
-          update_in(timers, [name], &Timer.init(&1, value || get_in(options, [name, :secs])))
-    }
+    seconds = value || get_in(options, [name, :secs])
+    %__MODULE__{fsm | timers: update_in(timers, [name], &Timer.init(&1, seconds))}
   end
 
   defp restart_timer(fsm, name, value \\ nil) do
