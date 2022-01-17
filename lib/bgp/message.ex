@@ -9,24 +9,42 @@ defmodule BGP.Message do
   @marker 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF
   @marker_size 128
   @max_size 4_096
+  @extended_max_size 65_536
 
   @behaviour BGP.Message.Encoder
 
   @impl Encoder
   def decode(<<header::binary()-size(@header_size), msg::binary>>, options) do
-    with {:ok, module} <- decode_header(header),
+    with {:ok, module, length} <- decode_header(header),
+         :ok <- check_length(module, length, options),
          do: module.decode(msg, options)
   end
 
-  defp decode_header(<<_marker::@marker_size, length::16, _type::8>>)
-       when length < @header_size or length > @max_size do
-    {:error, %Encoder.Error{code: :message_header, subcode: :bad_message_length, data: length}}
+  defp decode_header(<<@marker::@marker_size, length::16, type::8>>)
+       when length >= @header_size do
+    with {:ok, module} <- module_for_type(type), do: {:ok, module, length}
   end
-
-  defp decode_header(<<@marker::@marker_size, _length::16, type::8>>), do: module_for_type(type)
 
   defp decode_header(_header),
     do: {:error, %Encoder.Error{code: :message_header, subcode: :connection_not_synchronized}}
+
+  defp check_length(module, length, _options)
+       when module in [KEEPALIVE, OPEN] and length > @max_size do
+    {:error, %Encoder.Error{code: :message_header, subcode: :bad_message_length, data: length}}
+  end
+
+  defp check_length(_module, length, options) do
+    extended_message = Keyword.get(options, :extended_message)
+
+    case {extended_message, length} do
+      {extended, length} when (extended and length > @extended_max_size) or length > @max_size ->
+        {:error,
+         %Encoder.Error{code: :message_header, subcode: :bad_message_length, data: length}}
+
+      _ ->
+        :ok
+    end
+  end
 
   @impl Encoder
   def encode(%module{} = message, options) do
@@ -37,19 +55,20 @@ defmodule BGP.Message do
     [<<@marker::@marker_size>>, <<length::16>>, <<type::8>>, data]
   end
 
-  @spec stream!(iodata()) :: Enumerable.t() | no_return()
-  def stream!(data) do
+  @spec stream!(iodata(), Encoder.options()) :: Enumerable.t() | no_return()
+  def stream!(data, options) do
     Stream.unfold(data, fn
       <<marker::@marker_size, length::16, type::8, _rest::binary>> = data
       when byte_size(data) >= length ->
-        case decode_header(<<marker::@marker_size, length::16, type::8>>) do
-          {:ok, _module} ->
-            msg_data = binary_part(data, 0, length)
-            rest_size = byte_size(data) - length
-            rest_data = binary_part(data, length, rest_size)
+        with {:ok, module, length} <-
+               decode_header(<<marker::@marker_size, length::16, type::8>>),
+             :ok <- check_length(module, length, options) do
+          msg_data = binary_part(data, 0, length)
+          rest_size = byte_size(data) - length
+          rest_data = binary_part(data, length, rest_size)
 
-            {{rest_data, msg_data}, rest_data}
-
+          {{rest_data, msg_data}, rest_data}
+        else
           {:error, error} ->
             throw(error)
         end
