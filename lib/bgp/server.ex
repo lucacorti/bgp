@@ -94,14 +94,14 @@ defmodule BGP.Server do
   end
 
   @spec get_peer(t(), Prefix.t()) :: {:ok, keyword()} | {:error, :not_found}
-  def get_peer(server, address) do
+  def get_peer(server, host) do
     server
     |> get_config()
     |> Keyword.get(:peers, [])
     |> Enum.find_value({:error, :not_found}, fn peer ->
       peer_host = Keyword.get(peer, :host)
 
-      case Prefix.to_string(address) do
+      case Prefix.to_string(host) do
         {:ok, ^peer_host} -> {:ok, peer}
         {:error, :invalid} -> nil
       end

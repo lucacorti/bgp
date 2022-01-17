@@ -8,6 +8,9 @@ defmodule BGP.Server.FSM do
 
   require Logger
 
+  @asn_2octets_max 65_535
+  @asn_trans 23_456
+
   @type connection_op :: :connect | :disconnect
   @type msg_op :: :recv | :send
 
@@ -38,6 +41,7 @@ defmodule BGP.Server.FSM do
           counters: keyword(counter()),
           delay_open: boolean(),
           delay_open_time: non_neg_integer(),
+          extended_message: boolean(),
           four_octets: boolean(),
           hold_time: BGP.hold_time(),
           internal: boolean(),
@@ -61,6 +65,7 @@ defmodule BGP.Server.FSM do
             counters: [connect_retry: 0],
             delay_open: nil,
             delay_open_time: nil,
+            extended_message: false,
             four_octets: false,
             hold_time: nil,
             internal: false,
@@ -97,6 +102,11 @@ defmodule BGP.Server.FSM do
       Logger.debug("FSM state: #{old_state} -> #{fsm.state}")
       {:ok, fsm, effects}
     end
+  end
+
+  @spec options(t()) :: Message.Encoder.options()
+  def options(%__MODULE__{} = fsm) do
+    [extended_message: fsm.extended_message, four_octets: fsm.four_octets]
   end
 
   defp process_event(%__MODULE__{state: :idle} = fsm, {:stop, _type}),
@@ -838,7 +848,7 @@ defmodule BGP.Server.FSM do
 
   defp compose_open(%__MODULE__{} = fsm) do
     compose_msg(fsm, %OPEN{
-      asn: fsm.asn,
+      asn: compose_open_asn(fsm),
       bgp_id: fsm.bgp_id,
       hold_time: fsm.hold_time,
       parameters: [
@@ -852,20 +862,30 @@ defmodule BGP.Server.FSM do
     })
   end
 
+  defp compose_open_asn(%__MODULE__{asn: asn}) when asn < @asn_2octets_max, do: asn
+  defp compose_open_asn(_fsm), do: @asn_trans
+
   defp process_open(%__MODULE__{} = fsm, %OPEN{} = open) do
-    {four_octets, asn} =
-      Enum.find_value(open.parameters, {false, open.asn}, fn
-        %Capabilities{capabilities: capabilities} ->
-          Enum.find_value(capabilities, fn
-            %Capabilities.FourOctetsASN{asn: asn} -> {true, asn}
-            _ -> nil
-          end)
+    Enum.reduce(open.parameters, fsm, fn
+      %Capabilities{capabilities: capabilities}, %__MODULE__{} = fsm ->
+        process_open_capabilities(fsm, capabilities)
 
-        _ ->
-          nil
-      end)
+      _parameter, fsm ->
+        fsm
+    end)
+  end
 
-    %__MODULE__{fsm | four_octets: four_octets, internal: asn == fsm.asn}
+  defp process_open_capabilities(fsm, capabilities) do
+    Enum.reduce(capabilities, fsm, fn
+      %Capabilities.ExtendedMessage{}, %__MODULE__{} = fsm ->
+        %{fsm | extended_message: true}
+
+      %Capabilities.FourOctetsASN{asn: asn}, %__MODULE__{} = fsm ->
+        %{fsm | four_octets: true, internal: asn == fsm.asn}
+
+      _capability, fsm ->
+        fsm
+    end)
   end
 
   defp increment_counter(%__MODULE__{counters: counters} = fsm, name),

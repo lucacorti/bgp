@@ -38,9 +38,9 @@ defmodule BGP.Server.Listener do
   end
 
   @impl Handler
-  def handle_data(data, socket, %{buffer: buffer} = state) do
+  def handle_data(data, socket, %{buffer: buffer, fsm: fsm} = state) do
     (buffer <> data)
-    |> Message.stream!()
+    |> Message.stream!(FSM.options(fsm))
     |> Enum.reduce({:continue, state}, fn {rest, msg}, {:continue, state} ->
       with {:ok, state} <- trigger_event(state, socket, {:msg, msg, :recv}),
            do: {:continue, %{state | buffer: rest}}
