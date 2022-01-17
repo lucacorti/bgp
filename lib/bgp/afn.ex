@@ -1,10 +1,6 @@
 defmodule BGP.AFN do
   @moduledoc false
 
-  @type code :: non_neg_integer()
-  @type afi :: :reserved | :ipv4 | :ipv6
-  @type safi :: :reserved | :nlri_unicast | :nlri_multicast
-
   @afis [
     {0, :reserved},
     {1, :ipv4},
@@ -16,6 +12,13 @@ defmodule BGP.AFN do
     {1, :nlri_unicast},
     {2, :nlri_multicast}
   ]
+
+  @type afi ::
+          unquote(Enum.map_join(@afis, " | ", &inspect(elem(&1, 1))) |> Code.string_to_quoted!())
+  @type safi ::
+          unquote(Enum.map_join(@safis, " | ", &inspect(elem(&1, 1))) |> Code.string_to_quoted!())
+
+  @type code :: non_neg_integer()
 
   @spec decode_afi(code()) :: afi()
   for {code, afi} <- @afis do

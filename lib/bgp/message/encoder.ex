@@ -6,7 +6,7 @@ defmodule BGP.Message.Encoder do
   @type t :: struct()
   @type data :: iodata()
   @type length :: non_neg_integer()
-  @type options :: [four_octets_asns: boolean()]
+  @type options :: [extended_message: boolean(), four_octets_asns: boolean()]
 
   @callback decode(data(), options()) :: {:ok, t()} | {:error, Error.t()}
   @callback encode(t(), options()) :: data()

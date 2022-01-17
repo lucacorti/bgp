@@ -1,29 +1,6 @@
 defmodule BGP.Message.UPDATE.Attribute.Communities do
   @moduledoc false
 
-  @type community ::
-          :graceful_shutdown
-          | :accept_own
-          | :route_filter_translated_v4
-          | :route_filter_v4
-          | :route_filter_translated_v6
-          | :route_filter_v6
-          | :llgr_stale
-          | :no_llgr
-          | :accept_own_nexthop
-          | :standby_pe
-          | :blackhole
-          | :no_export
-          | :no_advertise
-          | :no_export_subconfed
-          | :no_peer
-  @type t :: %__MODULE__{communities: [community()]}
-  defstruct communities: []
-
-  alias BGP.Message.Encoder
-
-  @behaviour Encoder
-
   @communities [
     {0xFFFF0000, :graceful_shutdown},
     {0xFFFF0001, :accept_own},
@@ -41,6 +18,19 @@ defmodule BGP.Message.UPDATE.Attribute.Communities do
     {0xFFFFFF03, :no_export_subconfed},
     {0xFFFFFF04, :no_peer}
   ]
+
+  @type community ::
+          unquote(
+            Enum.map_join(@communities, " | ", &inspect(elem(&1, 1)))
+            |> Code.string_to_quoted!()
+          )
+
+  @type t :: %__MODULE__{communities: [community()]}
+  defstruct communities: []
+
+  alias BGP.Message.Encoder
+
+  @behaviour Encoder
 
   @impl Encoder
   def decode(<<communities::binary>>, _options),
