@@ -155,11 +155,9 @@ defmodule BGP.Server.Session do
          do: {:noreply, state}
   end
 
-  def handle_info({:tcp, socket, data}, %{buffer: buffer, socket: socket} = state) do
-    :inet.setopts(socket, active: :once)
-
+  def handle_info({:tcp, socket, data}, %{buffer: buffer, fsm: fsm, socket: socket} = state) do
     (buffer <> data)
-    |> Message.stream!()
+    |> Message.stream!(FSM.options(fsm))
     |> Enum.reduce({:noreply, state}, fn {rest, msg}, {:noreply, state} ->
       with {:ok, state} <- trigger_event(state, {:msg, msg, :recv}) do
         {:noreply, %{state | buffer: rest}}
@@ -170,6 +168,8 @@ defmodule BGP.Server.Session do
       data = Message.encode(Encoder.Error.to_notification(error), [])
       process_effect(state, {:msg, data, :send})
       {:disconnect, error, state}
+  after
+    :inet.setopts(socket, active: :once)
   end
 
   def handle_info({:timer, _timer, :expires} = event, state) do
