@@ -6,7 +6,8 @@ defmodule BGP.Message.OPEN do
   alias BGP.Prefix
 
   @asn_min 1
-  @asn_max 65_535
+  @asn_max :math.pow(2, 16) - 1
+  @asn_four_octets_max :math.pow(2, 32) - 1
   @hold_time_min 3
 
   @type t :: %__MODULE__{
@@ -26,7 +27,7 @@ defmodule BGP.Message.OPEN do
           params::binary()-size(params_length)>>,
         options
       ) do
-    with :ok <- check_asn(asn),
+    with :ok <- check_asn(asn, options),
          :ok <- check_hold_time(hold_time),
          :ok <- check_version(version),
          {:ok, bgp_id} <-
@@ -46,10 +47,15 @@ defmodule BGP.Message.OPEN do
   def decode(_keepalive, _options),
     do: {:error, %Encoder.Error{code: :message_header, subcode: :bad_message_length}}
 
-  defp check_asn(asn) when asn >= @asn_min and asn < @asn_max, do: :ok
+  defp check_asn(asn, options) do
+    four_octets = Keyword.get(options, :four_octets, false)
 
-  defp check_asn(_asn),
-    do: {:error, %Encoder.Error{code: :open_message, subcode: :bad_peer_as}}
+    case {four_octets, asn} do
+      {true, asn} when asn >= @asn_min and asn <= @asn_four_octets_max -> :ok
+      {false, asn} when asn >= @asn_min and asn <= @asn_max -> :ok
+      _ -> {:error, %Encoder.Error{code: :open_message, subcode: :bad_peer_as}}
+    end
+  end
 
   defp check_hold_time(hold_time) when hold_time == 0 or hold_time >= @hold_time_min, do: :ok
 
