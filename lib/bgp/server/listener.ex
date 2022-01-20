@@ -54,8 +54,13 @@ defmodule BGP.Server.Listener do
 
   @impl GenServer
   def handle_info({:timer, _timer, :expires} = event, {socket, state}) do
-    with {:ok, state} <- trigger_event(state, socket, event),
-         do: {:noreply, {socket, state}}
+    case trigger_event(state, socket, event) do
+      {:ok, state} ->
+        {:noreply, {socket, state}}
+
+      {action, state} ->
+        {:reply, {:error, action}, {socket, state}}
+    end
   end
 
   @impl GenServer
@@ -74,8 +79,13 @@ defmodule BGP.Server.Listener do
     else
       Logger.warn("LISTENER: closing conenction to peer due to collision")
 
-      with {:ok, state} <- trigger_event(state, socket, {:open, :collision_dump}),
-           do: {:reply, :ok, state}
+      case trigger_event(state, socket, {:open, :collision_dump}) do
+        {:ok, state} ->
+          {:reply, :ok, state}
+
+        {action, state} ->
+          {:reply, {:error, action}, {socket, state}}
+      end
     end
   end
 
