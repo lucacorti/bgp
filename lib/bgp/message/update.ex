@@ -46,9 +46,6 @@ defmodule BGP.Message.UPDATE do
     {:ok, %{msg | nlri: decode_prefixes(nlri, [], options)}}
   end
 
-  defp decode_attributes(<<>>, attributes, _options),
-    do: Enum.reverse(attributes)
-
   defp decode_attributes(
          <<0::1, 0::1, _partial::1, _extended::1, _unused::4, _rest::binary>>,
          _attributes,
@@ -70,17 +67,27 @@ defmodule BGP.Message.UPDATE do
        ),
        do: :error
 
+  defp decode_attributes(<<>>, attributes, _options),
+    do: Enum.reverse(attributes)
+
   defp decode_attributes(
-         <<_optional::1, _transitive::1, _partial::1, extended::1, _unused::4, code::8,
+         <<optional::1, transitive::1, _partial::1, extended::1, _unused::4, code::8,
            data::binary>>,
          attributes,
          options
        ) do
-    length_size = if extended == 1, do: 16, else: 8
+    length_size = 8 + 8 * extended
     <<length::integer()-size(length_size), attribute::binary()-size(length), rest::binary>> = data
 
-    with {:ok, attribute} <- Attribute.decode(<<code::8, attribute::binary>>, options) do
-      decode_attributes(rest, [attribute | attributes], options)
+    case {optional, transitive, Attribute.decode(<<code::8, attribute::binary>>, options)} do
+      {_, _, {:ok, attribute}} ->
+        decode_attributes(rest, [attribute | attributes], options)
+
+      {_, _, :skip} ->
+        decode_attributes(rest, attributes, options)
+
+      {_, _, {:error, _reason}} = error ->
+        error
     end
   end
 

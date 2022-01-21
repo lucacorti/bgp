@@ -1,36 +1,7 @@
 defmodule BGP.Message.NOTIFICATION do
   @moduledoc false
 
-  alias BGP.Message.Encoder.Error
-
-  @type t :: %__MODULE__{
-          code: Error.code(),
-          subcode: Error.subcode(),
-          data: Error.data()
-        }
-
-  @enforce_keys [:code]
-  defstruct code: nil, subcode: :unspecific, data: <<>>
-
-  alias BGP.Message.Encoder
-
-  @behaviour Encoder
-
-  @impl Encoder
-  def decode(<<code::8, subcode::8, data::binary>>, _options),
-    do: {
-      :ok,
-      %__MODULE__{code: decode_code(code), subcode: decode_subcode(code, subcode), data: data}
-    }
-
-  def decode(_notification, _options),
-    do: {:error, %Encoder.Error{code: :message_header, subcode: :bad_message_length}}
-
-  @impl Encoder
-  def encode(%__MODULE__{code: code, subcode: subcode, data: data}, _options),
-    do: [<<encode_code(code)::8>>, <<encode_subcode(code, subcode)::8>>, <<data::binary>>]
-
-  @codes [
+  errors = [
     {
       1,
       :message_header,
@@ -96,11 +67,65 @@ defmodule BGP.Message.NOTIFICATION do
     {7, :route_refresh_message, [{1, :invalid_message_length}]}
   ]
 
-  for {code, reason, _subcodes} <- @codes do
+  for {_code, name, subcodes} <- errors, not Enum.empty?(subcodes) do
+    @type unquote(
+            ("#{name} :: " <> Enum.map_join(subcodes, " | ", &inspect(elem(&1, 1))))
+            |> Code.string_to_quoted!()
+          )
+  end
+
+  @type subcode ::
+          unquote(
+            ((errors
+              |> Enum.reject(fn
+                {_, _, []} -> true
+                _ -> false
+              end)
+              |> Enum.map_join(" | ", &to_string(elem(&1, 1)))) <> " | :unspecific")
+            |> Code.string_to_quoted!()
+          )
+
+  @type code ::
+          unquote(
+            errors
+            |> Enum.map_join(" | ", &inspect(elem(&1, 1)))
+            |> Code.string_to_quoted!()
+          )
+
+  @type data :: binary()
+
+  @type t :: %__MODULE__{
+          code: code(),
+          subcode: subcode(),
+          data: data()
+        }
+
+  @enforce_keys [:code]
+  defstruct code: nil, subcode: :unspecific, data: <<>>
+
+  alias BGP.Message.Encoder
+
+  @behaviour Encoder
+
+  @impl Encoder
+  def decode(<<code::8, subcode::8, data::binary>>, _options),
+    do: {
+      :ok,
+      %__MODULE__{code: decode_code(code), subcode: decode_subcode(code, subcode), data: data}
+    }
+
+  def decode(_notification, _options),
+    do: {:error, %Encoder.Error{code: :message_header, subcode: :bad_message_length}}
+
+  @impl Encoder
+  def encode(%__MODULE__{code: code, subcode: subcode, data: data}, _options),
+    do: [<<encode_code(code)::8>>, <<encode_subcode(code, subcode)::8>>, <<data::binary>>]
+
+  for {code, reason, _subcodes} <- errors do
     defp decode_code(unquote(code)), do: unquote(reason)
   end
 
-  for {code, _reason, subcodes} <- @codes do
+  for {code, _reason, subcodes} <- errors do
     for {subcode, subreason} <- subcodes do
       defp decode_subcode(unquote(code), unquote(subcode)),
         do: unquote(subreason)
@@ -109,11 +134,11 @@ defmodule BGP.Message.NOTIFICATION do
 
   defp decode_subcode(_code, 0), do: :unspecific
 
-  for {code, reason, _subcodes} <- @codes do
+  for {code, reason, _subcodes} <- errors do
     defp encode_code(unquote(reason)), do: unquote(code)
   end
 
-  for {_code, reason, subcodes} <- @codes do
+  for {_code, reason, subcodes} <- errors do
     for {subcode, subreason} <- subcodes do
       defp encode_subcode(unquote(reason), unquote(subreason)), do: unquote(subcode)
     end

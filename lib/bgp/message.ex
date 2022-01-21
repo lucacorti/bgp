@@ -49,10 +49,13 @@ defmodule BGP.Message do
   @impl Encoder
   def encode(%module{} = message, options) do
     data = module.encode(message, options)
-    length = @header_size + IO.iodata_length(data)
-    type = type_for_module(module)
 
-    [<<@marker::@marker_size>>, <<length::16>>, <<type::8>>, data]
+    [
+      <<@marker::@marker_size>>,
+      <<@header_size + IO.iodata_length(data)::16>>,
+      <<type_for_module(module)::8>>,
+      data
+    ]
   end
 
   @spec stream!(iodata(), Encoder.options()) :: Enumerable.t() | no_return()
@@ -81,7 +84,7 @@ defmodule BGP.Message do
     end)
   end
 
-  @messages [
+  messages = [
     {OPEN, 1},
     {UPDATE, 2},
     {NOTIFICATION, 3},
@@ -89,13 +92,13 @@ defmodule BGP.Message do
     {ROUTEREFRESH, 5}
   ]
 
-  for {module, type} <- @messages do
+  for {module, type} <- messages do
     defp type_for_module(unquote(module)), do: unquote(type)
   end
 
   defp type_for_module(module), do: raise("Unknown message module #{module}")
 
-  for {module, type} <- @messages do
+  for {module, type} <- messages do
     defp module_for_type(unquote(type)), do: {:ok, unquote(module)}
   end
 

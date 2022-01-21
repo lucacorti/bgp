@@ -17,23 +17,21 @@ defmodule BGP.Message.OPEN.Parameter do
   @impl Encoder
   def encode(%module{} = message, options) do
     data = module.encode(message, options)
-    length = IO.iodata_length(data)
-    type = type_for_module(module)
 
-    [<<type::8>>, <<length::8>>, data]
+    [<<type_for_module(module)::8>>, <<IO.iodata_length(data)::8>>, data]
   end
 
-  @attributes [
+  attributes = [
     {Capabilities, 2}
   ]
 
-  for {module, code} <- @attributes do
+  for {module, code} <- attributes do
     defp type_for_module(unquote(module)), do: unquote(code)
   end
 
   defp type_for_module(module), do: raise("Unknown path attribute module #{module}")
 
-  for {module, code} <- @attributes do
+  for {module, code} <- attributes do
     defp module_for_type(unquote(code)), do: {:ok, unquote(module)}
   end
 

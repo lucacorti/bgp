@@ -1,7 +1,7 @@
 defmodule BGP.Message.UPDATE.Attribute.Communities do
   @moduledoc false
 
-  @communities [
+  communities = [
     {0xFFFF0000, :graceful_shutdown},
     {0xFFFF0001, :accept_own},
     {0xFFFF0002, :route_filter_translated_v4},
@@ -21,7 +21,7 @@ defmodule BGP.Message.UPDATE.Attribute.Communities do
 
   @type community ::
           unquote(
-            Enum.map_join(@communities, " | ", &inspect(elem(&1, 1)))
+            Enum.map_join(communities, " | ", &inspect(elem(&1, 1)))
             |> Code.string_to_quoted!()
           )
 
@@ -41,7 +41,7 @@ defmodule BGP.Message.UPDATE.Attribute.Communities do
   defp decode_communities(<<community::32, rest::binary>>, communities),
     do: decode_communities(rest, [decode_community(community) | communities])
 
-  for {code, community} <- @communities do
+  for {code, community} <- communities do
     defp decode_community(unquote(code)), do: unquote(community)
   end
 
@@ -49,7 +49,7 @@ defmodule BGP.Message.UPDATE.Attribute.Communities do
   def encode(%__MODULE__{communities: communities}, _options),
     do: Enum.map(communities, &encode_community(&1))
 
-  for {code, community} <- @communities do
+  for {code, community} <- communities do
     defp encode_community(unquote(community)), do: unquote(code)
   end
 end

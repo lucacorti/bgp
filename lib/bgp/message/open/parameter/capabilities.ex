@@ -37,13 +37,12 @@ defmodule BGP.Message.OPEN.Parameter.Capabilities do
   def encode(%__MODULE__{capabilities: capabilities}, options) do
     Enum.map(capabilities, fn %module{} = capability ->
       data = module.encode(capability, options)
-      length = IO.iodata_length(data)
-      type = type_for_module(module)
-      [<<type::8>>, <<length::8>>, data]
+
+      [<<type_for_module(module)::8>>, <<IO.iodata_length(data)::8>>, data]
     end)
   end
 
-  @attributes [
+  attributes = [
     {MultiProtocol, 1},
     {RouteRefresh, 2},
     {ExtendedMessage, 6},
@@ -52,13 +51,13 @@ defmodule BGP.Message.OPEN.Parameter.Capabilities do
     {EnanchedRouteRefresh, 70}
   ]
 
-  for {module, code} <- @attributes do
+  for {module, code} <- attributes do
     defp type_for_module(unquote(module)), do: unquote(code)
   end
 
   defp type_for_module(module), do: raise("Unknown path attribute module #{module}")
 
-  for {module, code} <- @attributes do
+  for {module, code} <- attributes do
     defp module_for_type(unquote(code)), do: {:ok, unquote(module)}
   end
 

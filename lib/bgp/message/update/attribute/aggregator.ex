@@ -4,6 +4,9 @@ defmodule BGP.Message.UPDATE.Attribute.Aggregator do
   alias BGP.Message.Encoder
   alias BGP.Prefix
 
+  @asn_max :math.pow(2, 16) - 1
+  @asn_four_octets_max :math.pow(2, 16) - 1
+
   @type t :: %__MODULE__{asn: BGP.asn(), address: Prefix.t()}
 
   @enforce_keys [:asn, :address]
@@ -17,11 +20,16 @@ defmodule BGP.Message.UPDATE.Attribute.Aggregator do
     decode_aggregator(aggregator, four_octets)
   end
 
-  def decode_aggregator(<<asn::32, prefix::binary()-size(4)>>, true = _four_octets),
-    do: {:ok, %__MODULE__{asn: asn, address: Prefix.decode(prefix)}}
+  def decode_aggregator(<<asn::32, prefix::binary()-size(4)>>, true = _four_octets)
+      when asn > 0 and asn < @asn_four_octets_max,
+      do: {:ok, %__MODULE__{asn: asn, address: Prefix.decode(prefix)}}
 
-  def decode_aggregator(<<asn::16, prefix::binary()-size(4)>>, false = _four_octets),
-    do: {:ok, %__MODULE__{asn: asn, address: Prefix.decode(prefix)}}
+  def decode_aggregator(<<asn::16, prefix::binary()-size(4)>>, false = _four_octets)
+      when asn > 0 and asn < @asn_max,
+      do: {:ok, %__MODULE__{asn: asn, address: Prefix.decode(prefix)}}
+
+  def decode_aggregator(_aggregator, _four_octets),
+    do: :skip
 
   @impl Encoder
   def encode(%__MODULE__{asn: asn, address: address}, options) do
