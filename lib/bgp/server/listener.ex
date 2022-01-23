@@ -59,7 +59,7 @@ defmodule BGP.Server.Listener do
         {:noreply, {socket, state}}
 
       {action, state} ->
-        {:reply, {:error, action}, {socket, state}}
+        {:stop, {:error, action}, {socket, state}}
     end
   end
 
@@ -75,16 +75,16 @@ defmodule BGP.Server.Listener do
       |> Server.get_config(:bgp_id)
 
     if server_bgp_id > peer_bgp_id do
-      {:reply, {:error, :collision}, state}
+      {:reply, {:error, :collision}, {socket, state}}
     else
-      Logger.warn("LISTENER: closing conenction to peer due to collision")
+      Logger.warn("LISTENER: closing connection to peer due to collision")
 
       case trigger_event(state, socket, {:open, :collision_dump}) do
         {:ok, state} ->
-          {:reply, :ok, state}
+          {:stop, :normal, :ok, {socket, state}}
 
         {action, state} ->
-          {:reply, {:error, action}, {socket, state}}
+          {:stop, {:error, action}, :ok, {socket, state}}
       end
     end
   end
