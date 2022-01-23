@@ -65,7 +65,7 @@ defmodule BGP.Server.Listener do
 
   @impl GenServer
   def handle_call(
-        {:incoming_connection, peer_bgp_id},
+        {:outbound_connection, peer_bgp_id},
         _from,
         {socket, %{options: options} = state}
       ) do
@@ -128,7 +128,7 @@ defmodule BGP.Server.Listener do
         :ok ->
           return
 
-        {action, _reason} ->
+        {action, state} ->
           {action, state}
       end
     end)
@@ -137,34 +137,31 @@ defmodule BGP.Server.Listener do
   defp process_effect(%{server: server} = state, socket, {:msg, %OPEN{bgp_id: bgp_id}, :recv}) do
     %{address: address} = Socket.peer_info(socket)
 
-    case Session.session_for(server, address) do
-      {:ok, session} ->
-        case Session.incoming_connection(session, bgp_id) do
-          :ok ->
-            Logger.debug("No collision, keeping connection from peer #{inspect(address)}")
-            :ok
+    with {:ok, session} <- Session.session_for(server, address),
+         :ok <- Session.incoming_connection(session, bgp_id) do
+      Logger.debug("No collision, keeping connection from peer #{inspect(address)}")
+      :ok
+    else
+      {:error, :collision} ->
+        Logger.warn("Connection from peer #{inspect(address)} collides, closing")
 
-          {:error, :collision} ->
-            Logger.warn("Connection from peer #{inspect(address)} collides, closing")
-
-            with {:ok, _state} <- trigger_event(state, socket, {:open, :collision_dump}),
-                 do: {:close, :collision}
-        end
+        with {:ok, state} <- trigger_event(state, socket, {:open, :collision_dump}),
+             do: {:close, state}
 
       {:error, :not_found} ->
         Logger.warn("No configured session for peer #{inspect(address)}, closing")
-        {:close, :no_session}
+        {:close, state}
     end
   end
 
   defp process_effect(_state, _socket, {:msg, _msg, :recv}), do: :ok
 
-  defp process_effect(_state, socket, {:msg, data, :send}) do
+  defp process_effect(state, socket, {:msg, data, :send}) do
     case Socket.send(socket, data) do
       :ok -> :ok
-      {:error, reason} -> {:close, reason}
+      {:error, _reason} -> {:close, state}
     end
   end
 
-  defp process_effect(_state, _socket, {:tcp_connection, :disconnect}), do: {:close, :disconnect}
+  defp process_effect(state, _socket, {:tcp_connection, :disconnect}), do: {:close, state}
 end
