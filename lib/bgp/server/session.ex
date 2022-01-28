@@ -132,7 +132,7 @@ defmodule BGP.Server.Session do
     if server_bgp_id > peer_bgp_id do
       {:reply, {:error, :collision}, state}
     else
-      Logger.warn("CONNECTION: closing connection to peer due to collision")
+      Logger.warn("SESSION: closing connection to peer due to collision")
 
       with {:ok, state} <- trigger_event(state, {:open, :collision_dump}),
            do: {:reply, :ok, state}
@@ -178,14 +178,14 @@ defmodule BGP.Server.Session do
   end
 
   defp trigger_event(%{fsm: fsm} = state, event) do
-    Logger.debug("CONNECTION: Triggering FSM event: #{inspect(event)}")
+    Logger.debug("SESSION: Triggering FSM event: #{inspect(event)}")
 
     with {:ok, fsm, effects} <- FSM.event(fsm, event),
          do: process_effects(%{state | fsm: fsm}, effects)
   end
 
   defp process_effects(state, effects) do
-    Logger.debug("CONNECTION: Processing FSM effects: #{inspect(effects)}")
+    Logger.debug("SESSION: Processing FSM effects: #{inspect(effects)}")
 
     Enum.reduce(effects, {:ok, state}, fn effect, return ->
       case process_effect(state, effect) do
