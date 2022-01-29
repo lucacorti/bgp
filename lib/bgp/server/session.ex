@@ -42,7 +42,8 @@ defmodule BGP.Server.Session do
                     port: [
                       doc: "Peer TCP port.",
                       type: :integer,
-                      default: 179
+                      # make this configurable
+                      default: 180
                     ],
                     server: [
                       doc: "BGP Server the peer refers to",
@@ -107,8 +108,8 @@ defmodule BGP.Server.Session do
 
         trigger_event(%{state | socket: socket}, {:tcp_connection, :request_acked})
 
-      {:error, _} ->
-        Logger.error("Connection error on #{info}")
+      {:error, error} ->
+        Logger.error("Connection error on #{info}, reason: #{error}")
 
         {:ok, %{state | socket: nil, buffer: <<>>}}
     end
