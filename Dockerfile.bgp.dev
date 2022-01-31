@@ -28,6 +28,7 @@ RUN groupadd _bgpd && \
 RUN mkdir /etc/bgpd
 
 WORKDIR /root
+
 RUN git clone https://github.com/openbgpd-portable/openbgpd-portable.git
 
 RUN cd /root/openbgpd-portable && \

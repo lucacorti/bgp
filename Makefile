@@ -4,16 +4,14 @@
 # @file Makefile
 # @version 0.1
 
-all: init
-.PHONY: init start up build shell test halt delete
-
-init: up							## Setup application components
-
-start: up							## Start application
-	docker-compose exec bgp mix run --no-halt
+all: up
+.PHONY: up start build shell test halt delete
 
 up:									## Start all services
 	docker-compose up -d --remove-orphans
+
+start: up							## Start application
+	docker-compose exec bgp mix run --no-halt
 
 build:								## Build all services containers
 	docker-compose build
