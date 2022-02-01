@@ -35,18 +35,17 @@ defmodule BGP.Server.Session do
                       required: true
                     ],
                     mode: [
-                      doc: "Actively connects to the peer or just waits for a connection",
+                      doc: "Actively connects to the peer or just waits for a connection.",
                       type: {:in, [:active, :passive]},
                       default: :active
                     ],
                     port: [
                       doc: "Peer TCP port.",
                       type: :integer,
-                      # make this configurable
-                      default: 180
+                      default: Application.get_env(:bgp, __MODULE__)[:port] || 179
                     ],
                     server: [
-                      doc: "BGP Server the peer refers to",
+                      doc: "BGP Server the peer refers to.",
                       type: :atom,
                       required: true
                     ]
