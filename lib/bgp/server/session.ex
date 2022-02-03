@@ -42,7 +42,7 @@ defmodule BGP.Server.Session do
                     port: [
                       doc: "Peer TCP port.",
                       type: :integer,
-                      default: Application.compile_env(:bgp, __MODULE__)[:port] || 179
+                      default: 179
                     ],
                     server: [
                       doc: "BGP Server the peer refers to.",

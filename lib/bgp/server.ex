@@ -48,6 +48,11 @@ defmodule BGP.Server do
                       type: :boolean,
                       default: true
                     ],
+                    port: [
+                      doc: "Peer TCP port.",
+                      type: :integer,
+                      default: 179
+                    ],
                     peers: [
                       doc: "List peer configurations",
                       type: {:list, :keyword_list},
@@ -111,6 +116,7 @@ defmodule BGP.Server do
   @impl Supervisor
   def init(args) do
     server = Keyword.take(args, [:server])
+    port = Keyword.get(args, :port)
 
     peers =
       Enum.map(args[:peers], fn peer -> {BGP.Server.Session, Keyword.merge(peer, server)} end)
@@ -119,7 +125,7 @@ defmodule BGP.Server do
       peers ++
         [
           {ThousandIsland,
-           port: 179, handler_module: BGP.Server.Listener, handler_options: server}
+           port: port, handler_module: BGP.Server.Listener, handler_options: server}
         ],
       strategy: :one_for_all
     )

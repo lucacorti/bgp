@@ -29,7 +29,3 @@ bgp-*.tar
 
 # Ignore docker volumes
 .volumes/
-
-# Ignore PLTs files
-/priv/plts/*.plt
-/priv/plts/*.plt.hash
