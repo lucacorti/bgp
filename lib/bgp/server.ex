@@ -44,17 +44,17 @@ defmodule BGP.Server do
                       default: [secs: 30]
                     ],
                     notification_without_open: [
-                      doc: "Allows NOTIFICATIONS to be received without OPEN first",
+                      doc: "Allows NOTIFICATIONS to be received without OPEN first.",
                       type: :boolean,
                       default: true
                     ],
                     port: [
-                      doc: "Peer TCP port.",
+                      doc: "Port the server listens on.",
                       type: :integer,
                       default: 179
                     ],
                     peers: [
-                      doc: "List peer configurations",
+                      doc: "List peer configurations.",
                       type: {:list, :keyword_list},
                       default: []
                     ]
