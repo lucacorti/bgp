@@ -116,7 +116,6 @@ defmodule BGP.Server do
   @impl Supervisor
   def init(args) do
     server = Keyword.take(args, [:server])
-    port = Keyword.get(args, :port)
 
     peers =
       Enum.map(args[:peers], fn peer -> {BGP.Server.Session, Keyword.merge(peer, server)} end)
@@ -125,7 +124,7 @@ defmodule BGP.Server do
       peers ++
         [
           {ThousandIsland,
-           port: port, handler_module: BGP.Server.Listener, handler_options: server}
+           port: args[:port], handler_module: BGP.Server.Listener, handler_options: server}
         ],
       strategy: :one_for_all
     )
