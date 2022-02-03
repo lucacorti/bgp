@@ -26,3 +26,6 @@ bgp-*.tar
 /tmp/
 
 .elixir_ls
+
+# Ignore docker volumes
+.volumes/

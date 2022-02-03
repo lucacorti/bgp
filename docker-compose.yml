@@ -1,0 +1,45 @@
+version: "3.9"
+
+services:
+  bgp:
+    build:
+      context: ./
+      dockerfile: Dockerfile.dev
+    image: bgp-dev:latest
+    container_name: bgp-dev
+    security_opt:
+      - seccomp:unconfined
+    working_dir: /app
+    command: tail -f /dev/null
+    ports:
+      - 179:179
+    depends_on:
+      - openbgpd
+    volumes:
+      - .:/app
+    networks:
+      app_subnet:
+        ipv4_address: 172.16.1.3
+
+  openbgpd:
+    build:
+      context: ./
+      dockerfile: Dockerfile.bgp.dev
+    image: openbgpd:latest
+    container_name: openbgpd
+    ports:
+      - 180:179
+    restart: always
+    volumes:
+      - ./bgpd:/etc/bgpd:rw
+    networks:
+      app_subnet:
+        ipv4_address: 172.16.1.4
+
+networks:
+  app_subnet:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.16.1.0/24
+          gateway: 172.16.1.1
