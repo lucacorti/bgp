@@ -6,7 +6,7 @@ defmodule BGP.Server.Listener do
   use Handler
 
   alias BGP.{Message, Prefix, Server}
-  alias BGP.Message.{Encoder, OPEN}
+  alias BGP.Message.{Encoder.Error, OPEN}
   alias BGP.Server.{FSM, Session}
 
   require Logger
@@ -46,8 +46,8 @@ defmodule BGP.Server.Listener do
            do: {:continue, %{state | buffer: rest}}
     end)
   catch
-    %Encoder.Error{} = error ->
-      data = Message.encode(Encoder.Error.to_notification(error), [])
+    %Error{} = error ->
+      data = Message.encode(Error.to_notification(error), [])
       process_effect(state, socket, {:msg, data, :send})
       {:close, state}
   end
@@ -134,11 +134,11 @@ defmodule BGP.Server.Listener do
     end)
   end
 
-  defp process_effect(%{server: server} = state, socket, {:msg, %OPEN{bgp_id: bgp_id}, :recv}) do
+  defp process_effect(%{server: server} = state, socket, {:msg, %OPEN{} = open, :recv}) do
     %{address: address} = Socket.peer_info(socket)
 
     with {:ok, session} <- Session.session_for(server, address),
-         :ok <- Session.incoming_connection(session, bgp_id) do
+         :ok <- Session.incoming_connection(session, open.bgp_id) do
       Logger.debug("No collision, keeping connection from peer #{inspect(address)}")
       :ok
     else

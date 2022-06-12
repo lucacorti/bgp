@@ -5,6 +5,7 @@ defmodule BGP.Message.KEEPALIVE do
   defstruct []
 
   alias BGP.Message.Encoder
+  alias BGP.Message.Encoder.Error
 
   @behaviour Encoder
 
@@ -12,7 +13,7 @@ defmodule BGP.Message.KEEPALIVE do
   def decode(<<>>, _options), do: {:ok, %__MODULE__{}}
 
   def decode(_keepalive, _options),
-    do: {:error, %Encoder.Error{code: :message_header, subcode: :bad_message_length}}
+    do: {:error, %Error{code: :message_header, subcode: :bad_message_length}}
 
   @impl Encoder
   def encode(_keepalive, _options), do: <<>>

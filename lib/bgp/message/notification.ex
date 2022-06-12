@@ -1,6 +1,8 @@
 defmodule BGP.Message.NOTIFICATION do
   @moduledoc false
 
+  alias BGP.Message.Encoder.Error
+
   errors = [
     {
       1,
@@ -115,7 +117,7 @@ defmodule BGP.Message.NOTIFICATION do
     }
 
   def decode(_notification, _options),
-    do: {:error, %Encoder.Error{code: :message_header, subcode: :bad_message_length}}
+    do: {:error, %Error{code: :message_header, subcode: :bad_message_length}}
 
   @impl Encoder
   def encode(%__MODULE__{code: code, subcode: subcode, data: data}, _options),

@@ -2,6 +2,7 @@ defmodule BGP.Message do
   @moduledoc false
 
   alias BGP.Message.{Encoder, KEEPALIVE, NOTIFICATION, OPEN, ROUTEREFRESH, UPDATE}
+  alias BGP.Message.Encoder.Error
 
   @type t :: KEEPALIVE.t() | NOTIFICATION.t() | OPEN.t() | UPDATE.t() | ROUTEREFRESH.t()
 
@@ -26,11 +27,11 @@ defmodule BGP.Message do
   end
 
   defp decode_header(_header),
-    do: {:error, %Encoder.Error{code: :message_header, subcode: :connection_not_synchronized}}
+    do: {:error, %Error{code: :message_header, subcode: :connection_not_synchronized}}
 
   defp check_length(module, length, _options)
        when module in [KEEPALIVE, OPEN] and length > @max_size do
-    {:error, %Encoder.Error{code: :message_header, subcode: :bad_message_length, data: length}}
+    {:error, %Error{code: :message_header, subcode: :bad_message_length, data: length}}
   end
 
   defp check_length(_module, length, options) do
@@ -38,8 +39,7 @@ defmodule BGP.Message do
 
     case {extended_message, length} do
       {extended, length} when (extended and length > @extended_max_size) or length > @max_size ->
-        {:error,
-         %Encoder.Error{code: :message_header, subcode: :bad_message_length, data: length}}
+        {:error, %Error{code: :message_header, subcode: :bad_message_length, data: length}}
 
       _ ->
         :ok
@@ -105,7 +105,7 @@ defmodule BGP.Message do
   defp module_for_type(type) do
     {
       :error,
-      %Encoder.Error{code: :message_header, subcode: :bad_message_type, data: <<type::8>>}
+      %Error{code: :message_header, subcode: :bad_message_type, data: <<type::8>>}
     }
   end
 end

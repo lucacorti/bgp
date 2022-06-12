@@ -6,7 +6,7 @@ defmodule BGP.Server.Session do
   use Connection
 
   alias BGP.{Message, Prefix, Server}
-  alias BGP.Message.{Encoder, OPEN}
+  alias BGP.Message.{Encoder.Error, OPEN}
   alias BGP.Server.{FSM, Listener}
 
   require Logger
@@ -164,8 +164,8 @@ defmodule BGP.Server.Session do
       end
     end)
   catch
-    %Encoder.Error{} = error ->
-      data = Message.encode(Encoder.Error.to_notification(error), [])
+    %Error{} = error ->
+      data = Message.encode(Error.to_notification(error), [])
       process_effect(state, {:msg, data, :send})
       {:disconnect, error, state}
   after

@@ -2,13 +2,13 @@ defmodule BGP.Message.ROUTEREFRESH do
   @moduledoc false
 
   alias BGP.AFN
+  alias BGP.Message.Encoder
+  alias BGP.Message.Encoder.Error
 
   @type subtype :: :route_refresh | :borr | :eorr
   @type t :: %__MODULE__{afi: AFN.afi(), safi: AFN.safi()}
   @enforce_keys [:afi, :safi]
   defstruct afi: nil, safi: nil, subtype: :route_refresh
-
-  alias BGP.Message.Encoder
 
   @behaviour Encoder
 
@@ -27,7 +27,7 @@ defmodule BGP.Message.ROUTEREFRESH do
   defp decode_subtype(0), do: {:ok, :route_refresh}
   defp decode_subtype(1), do: {:ok, :borr}
   defp decode_subtype(2), do: {:ok, :eorr}
-  defp decode_subtype(_code), do: {:error, %Encoder.Error{code: :route_refresh_message}}
+  defp decode_subtype(_code), do: {:error, %Error{code: :route_refresh_message}}
 
   @impl Encoder
   def encode(%__MODULE__{afi: afi, safi: safi, subtype: subtype}, _options),

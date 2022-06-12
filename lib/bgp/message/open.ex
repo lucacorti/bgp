@@ -2,6 +2,7 @@ defmodule BGP.Message.OPEN do
   @moduledoc false
 
   alias BGP.Message.Encoder
+  alias BGP.Message.Encoder.Error
   alias BGP.Message.OPEN.Parameter
   alias BGP.Prefix
 
@@ -45,7 +46,7 @@ defmodule BGP.Message.OPEN do
   end
 
   def decode(_keepalive, _options),
-    do: {:error, %Encoder.Error{code: :message_header, subcode: :bad_message_length}}
+    do: {:error, %Error{code: :message_header, subcode: :bad_message_length}}
 
   defp check_asn(asn, options) do
     four_octets = Keyword.get(options, :four_octets, false)
@@ -53,20 +54,20 @@ defmodule BGP.Message.OPEN do
     case {four_octets, asn} do
       {true, asn} when asn >= @asn_min and asn <= @asn_four_octets_max -> :ok
       {false, asn} when asn >= @asn_min and asn <= @asn_max -> :ok
-      _ -> {:error, %Encoder.Error{code: :open_message, subcode: :bad_peer_as}}
+      _ -> {:error, %Error{code: :open_message, subcode: :bad_peer_as}}
     end
   end
 
   defp check_hold_time(hold_time) when hold_time == 0 or hold_time >= @hold_time_min, do: :ok
 
   defp check_hold_time(_hold_time),
-    do: {:error, %Encoder.Error{code: :open_message, subcode: :unacceptable_hold_time}}
+    do: {:error, %Error{code: :open_message, subcode: :unacceptable_hold_time}}
 
   defp check_version(4), do: :ok
 
   defp check_version(version) do
     {:error,
-     %Encoder.Error{
+     %Error{
        code: :open_message,
        subcode: :unsupported_version_number,
        data: <<version::16>>
@@ -79,7 +80,7 @@ defmodule BGP.Message.OPEN do
         {:ok, prefix}
 
       _error ->
-        {:error, %Encoder.Error{code: :open_message, subcode: :bad_bgp_identifier}}
+        {:error, %Error{code: :open_message, subcode: :bad_bgp_identifier}}
     end
   end
 

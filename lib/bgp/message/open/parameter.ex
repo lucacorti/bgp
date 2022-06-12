@@ -2,6 +2,7 @@ defmodule BGP.Message.OPEN.Parameter do
   @moduledoc false
 
   alias BGP.Message.Encoder
+  alias BGP.Message.Encoder.Error
   alias BGP.Message.OPEN.Parameter.Capabilities
 
   @type t :: struct()
@@ -36,5 +37,5 @@ defmodule BGP.Message.OPEN.Parameter do
   end
 
   defp module_for_type(_code),
-    do: {:error, %Encoder.Error{code: :open_message, subcode: :unsupported_optional_parameter}}
+    do: {:error, %Error{code: :open_message, subcode: :unsupported_optional_parameter}}
 end

@@ -2,6 +2,7 @@ defmodule BGP.Message.OPEN.Parameter.Capabilities do
   @moduledoc false
 
   alias BGP.Message.Encoder
+  alias BGP.Message.Encoder.Error
 
   alias BGP.Message.OPEN.Parameter.Capabilities.{
     FourOctetsASN,
@@ -61,5 +62,5 @@ defmodule BGP.Message.OPEN.Parameter.Capabilities do
     defp module_for_type(unquote(code)), do: {:ok, unquote(module)}
   end
 
-  defp module_for_type(_code), do: {:error, %Encoder.Error{code: :open_message}}
+  defp module_for_type(_code), do: {:error, %Error{code: :open_message}}
 end
