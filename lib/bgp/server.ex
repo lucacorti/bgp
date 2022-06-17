@@ -85,7 +85,7 @@ defmodule BGP.Server do
 
   @spec get_config(t()) :: keyword()
   def get_config(server) do
-    server.__otp_app__
+    server.__otp_app__()
     |> Application.get_env(server, [])
     |> NimbleOptions.validate!(@options_schema)
     |> Keyword.put(:server, server)
