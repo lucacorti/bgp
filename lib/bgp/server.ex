@@ -92,6 +92,9 @@ defmodule BGP.Server do
     %{id: server, type: :supervisor, start: {__MODULE__, :start_link, [opts]}}
   end
 
+  @doc false
+  def peer_options_schema, do: @peer_schema
+
   @spec start_link(keyword) :: Supervisor.on_start()
   def start_link(server: server) do
     options =
