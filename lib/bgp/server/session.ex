@@ -55,10 +55,6 @@ defmodule BGP.Server.Session do
   Supported options:
 
   #{NimbleOptions.docs(@options_schema)}
-
-  Peers accept the following options:
-
-  #{NimbleOptions.docs(Server.peer_options_schema())}
   """
   @type options() :: keyword()
 
