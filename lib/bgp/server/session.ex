@@ -30,7 +30,7 @@ defmodule BGP.Server.Session do
                       required: true
                     ],
                     host: [
-                      doc: "Peer IP address as `:string`.",
+                      doc: "Peer IP address as string.",
                       type: {:custom, Prefix, :parse, []},
                       required: true
                     ],

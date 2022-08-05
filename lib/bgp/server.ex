@@ -14,7 +14,7 @@ defmodule BGP.Server do
                       required: true
                     ],
                     bgp_id: [
-                      doc: "Server BGP ID, IP address as `:string`.",
+                      doc: "Server BGP ID, IP address as string.",
                       type: {:custom, Prefix, :parse, []},
                       required: true
                     ],
@@ -54,11 +54,29 @@ defmodule BGP.Server do
                       default: 179
                     ],
                     peers: [
-                      doc: "List peer configurations.",
+                      doc: "List of peer configurations.",
                       type: {:list, :keyword_list},
                       default: []
                     ]
                   )
+
+  @peer_schema NimbleOptions.new!(
+                 asn: [
+                   doc: "Peer Autonomous System Number.",
+                   type: :pos_integer,
+                   required: true
+                 ],
+                 bgp_id: [
+                   doc: "Peer BGP ID, IP address as string.",
+                   type: {:custom, Prefix, :parse, []},
+                   required: true
+                 ],
+                 host: [
+                   doc: "Peer address, IP address as string.",
+                   type: {:custom, Prefix, :parse, []},
+                   required: true
+                 ]
+               )
 
   defmacro __using__(otp_app: otp_app) when is_atom(otp_app) do
     quote do
@@ -118,13 +136,18 @@ defmodule BGP.Server do
     server = Keyword.take(args, [:server])
 
     peers =
-      Enum.map(args[:peers], fn peer -> {BGP.Server.Session, Keyword.merge(peer, server)} end)
+      Enum.map(args[:peers], fn peer ->
+        NimbleOptions.validate!(peer, @peer_schema)
+        {BGP.Server.Session, Keyword.merge(peer, server)}
+      end)
 
     Supervisor.init(
       peers ++
         [
-          {ThousandIsland,
-           port: args[:port], handler_module: BGP.Server.Listener, handler_options: server}
+          {
+            ThousandIsland,
+            port: args[:port], handler_module: BGP.Server.Listener, handler_options: server
+          }
         ],
       strategy: :one_for_all
     )
