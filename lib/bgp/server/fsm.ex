@@ -87,8 +87,8 @@ defmodule BGP.Server.FSM do
       asn: options[:asn],
       bgp_id: options[:bgp_id],
       delay_open: options[:delay_open][:enabled],
-      delay_open_time: options[:delay_open][:secs],
-      hold_time: options[:hold_time][:secs],
+      delay_open_time: options[:delay_open][:seconds],
+      hold_time: options[:hold_time][:seconds],
       notification_without_open: options[:notification_without_open],
       options: options
     )
@@ -895,7 +895,7 @@ defmodule BGP.Server.FSM do
     do: %__MODULE__{fsm | counters: update_in(counters, [name], fn _ -> 0 end)}
 
   defp set_timer(%__MODULE__{options: options, timers: timers} = fsm, name, value \\ nil) do
-    seconds = value || get_in(options, [name, :secs])
+    seconds = value || get_in(options, [name, :seconds])
     %__MODULE__{fsm | timers: update_in(timers, [name], &Timer.init(&1, seconds))}
   end
 

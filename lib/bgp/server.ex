@@ -21,27 +21,27 @@ defmodule BGP.Server do
                     connect_retry: [
                       type: :keyword_list,
                       keys: [
-                        secs: [doc: "Connect Retry timer seconds.", type: :non_neg_integer]
+                        seconds: [doc: "Connect Retry timer seconds.", type: :non_neg_integer]
                       ],
-                      default: [secs: 120]
+                      default: [seconds: 120]
                     ],
                     delay_open: [
                       type: :keyword_list,
                       keys: [
                         enabled: [doc: "Enable Delay OPEN.", type: :boolean],
-                        secs: [doc: "Delay OPEN timer seconds.", type: :non_neg_integer]
+                        seconds: [doc: "Delay OPEN timer seconds.", type: :non_neg_integer]
                       ],
-                      default: [enabled: true, secs: 5]
+                      default: [enabled: true, seconds: 5]
                     ],
                     hold_time: [
                       type: :keyword_list,
-                      keys: [secs: [doc: "Hold Time timer seconds.", type: :non_neg_integer]],
-                      default: [secs: 90]
+                      keys: [seconds: [doc: "Hold Time timer seconds.", type: :non_neg_integer]],
+                      default: [seconds: 90]
                     ],
                     keep_alive: [
                       type: :keyword_list,
-                      keys: [secs: [doc: "Keep Alive timer seconds.", type: :non_neg_integer]],
-                      default: [secs: 30]
+                      keys: [seconds: [doc: "Keep Alive timer seconds.", type: :non_neg_integer]],
+                      default: [seconds: 30]
                     ],
                     notification_without_open: [
                       doc: "Allows NOTIFICATIONS to be received without OPEN first.",
