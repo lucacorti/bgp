@@ -24,7 +24,7 @@ defmodule BGP.Message.UPDATE do
 
   defp decode_withdrawn_routes(
          %__MODULE__{} = msg,
-         <<length::16, prefixes::binary()-size(length), rest::binary>>,
+         <<length::16, prefixes::binary-size(length), rest::binary>>,
          options
        ) do
     {:ok, %{msg | withdrawn_routes: decode_prefixes(prefixes, [], options)}, rest}
@@ -32,7 +32,7 @@ defmodule BGP.Message.UPDATE do
 
   defp decode_path_attributes(
          %__MODULE__{} = msg,
-         <<length::16, attributes::binary()-size(length), rest::binary>>,
+         <<length::16, attributes::binary-size(length), rest::binary>>,
          options
        ) do
     {:ok, %{msg | path_attributes: decode_attributes(attributes, [], options)}, rest}
@@ -77,7 +77,7 @@ defmodule BGP.Message.UPDATE do
          options
        ) do
     length_size = 8 + 8 * extended
-    <<length::integer()-size(length_size), attribute::binary()-size(length), rest::binary>> = data
+    <<length::integer-size(length_size), attribute::binary-size(length), rest::binary>> = data
 
     case {optional, transitive, Attribute.decode(<<code::8, attribute::binary>>, options)} do
       {_, _, {:ok, attribute}} ->
@@ -94,7 +94,7 @@ defmodule BGP.Message.UPDATE do
   defp decode_prefixes(<<>>, prefixes, _options), do: Enum.reverse(prefixes)
 
   defp decode_prefixes(
-         <<length::8, prefix::binary()-unit(1)-size(length), rest::binary>>,
+         <<length::8, prefix::binary-unit(1)-size(length), rest::binary>>,
          prefixes,
          options
        ) do

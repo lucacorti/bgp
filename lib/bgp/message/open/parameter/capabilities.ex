@@ -25,7 +25,7 @@ defmodule BGP.Message.OPEN.Parameter.Capabilities do
   defp decode_capabilities(<<>>, capabilities, _options), do: Enum.reverse(capabilities)
 
   defp decode_capabilities(
-         <<code::8, length::8, value::binary()-size(length), rest::binary()>>,
+         <<code::8, length::8, value::binary-size(length), rest::binary>>,
          capabilities,
          options
        ) do

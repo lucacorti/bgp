@@ -43,7 +43,7 @@ defmodule BGP.Message.UPDATE.Attribute.ASPath do
         _ -> nil
       end)
 
-    [<<encode_type(type)::8, length::8>>, Enum.map(value, &<<&1::integer()-size(as_length)>>)]
+    [<<encode_type(type)::8, length::8>>, Enum.map(value, &<<&1::integer-size(as_length)>>)]
   end
 
   defp encode_type(:as_set), do: 1

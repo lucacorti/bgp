@@ -12,7 +12,7 @@ defmodule BGP.Message.UPDATE.Attribute.AS4Aggregator do
   @behaviour Encoder
 
   @impl Encoder
-  def decode(<<asn::32, prefix::binary()-size(4)>>, _options),
+  def decode(<<asn::32, prefix::binary-size(4)>>, _options),
     do: {:ok, %__MODULE__{asn: asn, address: Prefix.decode(prefix)}}
 
   def decode(_data), do: :error
@@ -20,7 +20,7 @@ defmodule BGP.Message.UPDATE.Attribute.AS4Aggregator do
   @impl Encoder
   def encode(%__MODULE__{asn: asn, address: address}, _options) do
     with {:ok, prefix, 32 = _length} <- Prefix.encode(address),
-         do: <<asn::32, prefix::binary()-size(4)>>
+         do: <<asn::32, prefix::binary-size(4)>>
   end
 
   def encode(_origin, _options), do: :error

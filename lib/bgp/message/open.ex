@@ -24,8 +24,8 @@ defmodule BGP.Message.OPEN do
 
   @impl Encoder
   def decode(
-        <<version::8, asn::16, hold_time::16, bgp_id::binary()-size(4), params_length::8,
-          params::binary()-size(params_length)>>,
+        <<version::8, asn::16, hold_time::16, bgp_id::binary-size(4), params_length::8,
+          params::binary-size(params_length)>>,
         options
       ) do
     with :ok <- check_asn(asn, options),
@@ -87,12 +87,12 @@ defmodule BGP.Message.OPEN do
   defp decode_parameters(<<>> = _data, params, _options), do: Enum.reverse(params)
 
   defp decode_parameters(
-         <<type::8, param_length::8, parameter::binary()-size(param_length), rest::binary>>,
+         <<type::8, param_length::8, parameter::binary-size(param_length), rest::binary>>,
          parameters,
          options
        ) do
     with {:ok, parameter} <-
-           Parameter.decode(<<type::8, param_length::8, parameter::binary()>>, options),
+           Parameter.decode(<<type::8, param_length::8, parameter::binary>>, options),
          do: decode_parameters(rest, [parameter | parameters], options)
   end
 
