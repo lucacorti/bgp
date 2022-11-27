@@ -1,5 +1,11 @@
 defmodule BGP.Prefix do
-  @moduledoc false
+  @moduledoc """
+  Prefix
+
+  Fuctions for converting prefixes to/from binary
+  """
+
+  import Bitwise, only: [<<<: 2]
 
   @type size :: pos_integer()
   @type t :: :inet.ip_address()
@@ -38,22 +44,14 @@ defmodule BGP.Prefix do
     end
   end
 
-  @spec to_integer(t()) :: non_neg_integer()
+  @spec to_integer(t()) :: {:ok, non_neg_integer()} | :error
   def to_integer({a, b, c, d}) do
-    Bitwise.<<<(a, 24) +
-      Bitwise.<<<(b, 16) +
-      Bitwise.<<<(c, 8) +
-      d
+    {:ok, Enum.sum([a <<< 24, b <<< 16, c <<< 8, d])}
   end
 
   def to_integer({a, b, c, d, e, f, g, h}) do
-    Bitwise.<<<(a, 112) +
-      Bitwise.<<<(b, 96) +
-      Bitwise.<<<(c, 80) +
-      Bitwise.<<<(d, 64) +
-      Bitwise.<<<(e, 48) +
-      Bitwise.<<<(f, 32) +
-      Bitwise.<<<(g, 16) +
-      h
+    {:ok, Enum.sum([a <<< 112, b <<< 96, c <<< 80, d <<< 64, e <<< 48, f <<< 32, g <<< 16, h])}
   end
+
+  def to_integer(_prefix), do: :error
 end
