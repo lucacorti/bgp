@@ -2,7 +2,6 @@ defmodule BGP.Message do
   @moduledoc false
 
   alias BGP.Message.{Encoder, KEEPALIVE, NOTIFICATION, OPEN, ROUTEREFRESH, UPDATE}
-  alias BGP.Message.Encoder.Error
 
   @type t :: KEEPALIVE.t() | NOTIFICATION.t() | OPEN.t() | UPDATE.t() | ROUTEREFRESH.t()
 
@@ -16,22 +15,23 @@ defmodule BGP.Message do
 
   @impl Encoder
   def decode(<<header::binary-size(@header_size), msg::binary>>, options) do
-    with {:ok, module, length} <- decode_header(header),
-         :ok <- check_length(module, length, options),
-         do: module.decode(msg, options)
+    {module, length} = decode_header(header)
+    check_length(module, length, options)
+    module.decode(msg, options)
   end
 
   defp decode_header(<<@marker::@marker_size, length::16, type::8>>)
        when length >= @header_size do
-    with {:ok, module} <- module_for_type(type), do: {:ok, module, length}
+    {module_for_type(type), length}
   end
 
-  defp decode_header(_header),
-    do: {:error, %Error{code: :message_header, subcode: :connection_not_synchronized}}
+  defp decode_header(_header) do
+    raise NOTIFICATION, code: :message_header, subcode: :connection_not_synchronized
+  end
 
   defp check_length(module, length, _options)
        when module in [KEEPALIVE, OPEN] and length > @max_size do
-    {:error, %Error{code: :message_header, subcode: :bad_message_length, data: length}}
+    raise NOTIFICATION, code: :message_header, subcode: :bad_message_length, data: length
   end
 
   defp check_length(_module, length, options) do
@@ -39,7 +39,7 @@ defmodule BGP.Message do
 
     case {extended_message, length} do
       {extended, length} when (extended and length > @extended_max_size) or length > @max_size ->
-        {:error, %Error{code: :message_header, subcode: :bad_message_length, data: length}}
+        raise NOTIFICATION, code: :message_header, subcode: :bad_message_length, data: length
 
       _ ->
         :ok
@@ -61,20 +61,12 @@ defmodule BGP.Message do
   @spec stream!(iodata(), Encoder.options()) :: Enumerable.t() | no_return()
   def stream!(data, options) do
     Stream.unfold(data, fn
-      <<marker::@marker_size, length::16, type::8, _rest::binary>> = data
+      <<_marker::@marker_size, length::16, _type::8, _rest::binary>> = data
       when byte_size(data) >= length ->
-        with {:ok, module, length} <-
-               decode_header(<<marker::@marker_size, length::16, type::8>>),
-             :ok <- check_length(module, length, options) do
-          msg_data = binary_part(data, 0, length)
-          rest_size = byte_size(data) - length
-          rest_data = binary_part(data, length, rest_size)
-
-          {{rest_data, msg_data}, rest_data}
-        else
-          {:error, error} ->
-            throw(error)
-        end
+        msg = binary_part(data, 0, length)
+        rest_size = byte_size(data) - length
+        rest_data = binary_part(data, length, rest_size)
+        {{rest_data, decode(msg, options)}, rest_data}
 
       <<>> ->
         nil
@@ -96,16 +88,15 @@ defmodule BGP.Message do
     defp type_for_module(unquote(module)), do: unquote(type)
   end
 
-  defp type_for_module(module), do: raise("Unknown message module #{module}")
+  defp type_for_module(_module) do
+    raise NOTIFICATION, code: :message_header, subcode: :bad_message_type
+  end
 
   for {module, type} <- messages do
-    defp module_for_type(unquote(type)), do: {:ok, unquote(module)}
+    defp module_for_type(unquote(type)), do: unquote(module)
   end
 
   defp module_for_type(type) do
-    {
-      :error,
-      %Error{code: :message_header, subcode: :bad_message_type, data: <<type::8>>}
-    }
+    raise NOTIFICATION, code: :message_header, subcode: :bad_message_type, data: <<type::8>>
   end
 end

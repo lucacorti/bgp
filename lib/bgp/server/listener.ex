@@ -6,7 +6,7 @@ defmodule BGP.Server.Listener do
   use Handler
 
   alias BGP.{Message, Prefix, Server}
-  alias BGP.Message.{Encoder.Error, OPEN}
+  alias BGP.Message.{NOTIFICATION, OPEN}
   alias BGP.Server.{FSM, Session}
 
   require Logger
@@ -46,14 +46,13 @@ defmodule BGP.Server.Listener do
            do: {:continue, %{state | buffer: rest}}
     end)
   catch
-    %Error{} = error ->
-      data = Message.encode(Error.to_notification(error), [])
-      process_effect(state, socket, {:msg, data, :send})
+    {:error, %NOTIFICATION{} = error} ->
+      process_effect(state, socket, {:send, error})
       {:close, state}
   end
 
   @impl GenServer
-  def handle_info({:timer, _timer, :expires} = event, {socket, state}) do
+  def handle_info({:timer, _timer, :expired} = event, {socket, state}) do
     case trigger_event(state, socket, event) do
       {:ok, state} ->
         {:noreply, {socket, state}}
@@ -156,8 +155,8 @@ defmodule BGP.Server.Listener do
 
   defp process_effect(_state, _socket, {:msg, _msg, :recv}), do: :ok
 
-  defp process_effect(state, socket, {:msg, data, :send}) do
-    case Socket.send(socket, data) do
+  defp process_effect(%{fsm: fsm} = state, socket, {:send, msg}) do
+    case Socket.send(socket, Message.encode(msg, FSM.options(fsm))) do
       :ok -> :ok
       {:error, _reason} -> {:close, state}
     end

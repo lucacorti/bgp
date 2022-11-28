@@ -6,7 +6,7 @@ defmodule BGP.Server.Session do
   use Connection
 
   alias BGP.{Message, Prefix, Server}
-  alias BGP.Message.{Encoder.Error, OPEN}
+  alias BGP.Message.{NOTIFICATION, OPEN}
   alias BGP.Server.{FSM, Listener}
 
   require Logger
@@ -164,15 +164,14 @@ defmodule BGP.Server.Session do
       end
     end)
   catch
-    %Error{} = error ->
-      data = Message.encode(Error.to_notification(error), [])
-      process_effect(state, {:msg, data, :send})
+    {:error, %NOTIFICATION{} = error} ->
+      process_effect(state, {:msg, error, :send})
       {:disconnect, error, state}
   after
     :inet.setopts(socket, active: :once)
   end
 
-  def handle_info({:timer, _timer, :expires} = event, state) do
+  def handle_info({:timer, _timer, :expired} = event, state) do
     with {:ok, state} <- trigger_event(state, event),
          do: {:noreply, state}
   end
@@ -227,8 +226,8 @@ defmodule BGP.Server.Session do
 
   defp process_effect(_state, {:msg, _msg, :recv}), do: :ok
 
-  defp process_effect(%{socket: socket}, {:msg, data, :send}) do
-    case :gen_tcp.send(socket, data) do
+  defp process_effect(%{fsm: fsm, socket: socket}, {:msg, msg, :send}) do
+    case :gen_tcp.send(socket, Message.encode(msg, FSM.options(fsm))) do
       :ok -> :ok
       {:error, reason} -> {:disconnect, reason}
     end

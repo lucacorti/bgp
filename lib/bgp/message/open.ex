@@ -2,8 +2,7 @@ defmodule BGP.Message.OPEN do
   @moduledoc false
 
   alias BGP.Message.Encoder
-  alias BGP.Message.Encoder.Error
-  alias BGP.Message.OPEN.Parameter
+  alias BGP.Message.{NOTIFICATION, OPEN.Parameter}
   alias BGP.Prefix
 
   @asn_min 1
@@ -31,22 +30,19 @@ defmodule BGP.Message.OPEN do
     with :ok <- check_asn(asn, options),
          :ok <- check_hold_time(hold_time),
          :ok <- check_version(version),
-         {:ok, bgp_id} <-
-           decode_bgp_id(bgp_id) do
-      {
-        :ok,
-        %__MODULE__{
-          asn: asn,
-          bgp_id: bgp_id,
-          hold_time: hold_time,
-          parameters: decode_parameters(params, [], options)
-        }
+         {:ok, bgp_id} <- decode_bgp_id(bgp_id) do
+      %__MODULE__{
+        asn: asn,
+        bgp_id: bgp_id,
+        hold_time: hold_time,
+        parameters: decode_parameters(params, [], options)
       }
     end
   end
 
-  def decode(_keepalive, _options),
-    do: {:error, %Error{code: :message_header, subcode: :bad_message_length}}
+  def decode(_keepalive, _options) do
+    raise NOTIFICATION, code: :message_header, subcode: :bad_message_length
+  end
 
   defp check_asn(asn, options) do
     four_octets = Keyword.get(options, :four_octets, false)
@@ -54,24 +50,22 @@ defmodule BGP.Message.OPEN do
     case {four_octets, asn} do
       {true, asn} when asn >= @asn_min and asn <= @asn_four_octets_max -> :ok
       {false, asn} when asn >= @asn_min and asn <= @asn_max -> :ok
-      _ -> {:error, %Error{code: :open_message, subcode: :bad_peer_as}}
+      _ -> raise NOTIFICATION, code: :open_message, subcode: :bad_peer_as
     end
   end
 
   defp check_hold_time(hold_time) when hold_time == 0 or hold_time >= @hold_time_min, do: :ok
 
   defp check_hold_time(_hold_time),
-    do: {:error, %Error{code: :open_message, subcode: :unacceptable_hold_time}}
+    do: raise(NOTIFICATION, code: :open_message, subcode: :unacceptable_hold_time)
 
   defp check_version(4), do: :ok
 
   defp check_version(version) do
-    {:error,
-     %Error{
-       code: :open_message,
-       subcode: :unsupported_version_number,
-       data: <<version::16>>
-     }}
+    raise NOTIFICATION,
+      code: :open_message,
+      subcode: :unsupported_version_number,
+      data: <<version::16>>
   end
 
   defp decode_bgp_id(bgp_id) do
@@ -80,7 +74,7 @@ defmodule BGP.Message.OPEN do
         {:ok, prefix}
 
       _error ->
-        {:error, %Error{code: :open_message, subcode: :bad_bgp_identifier}}
+        raise NOTIFICATION, code: :open_message, subcode: :bad_bgp_identifier
     end
   end
 
@@ -91,9 +85,8 @@ defmodule BGP.Message.OPEN do
          parameters,
          options
        ) do
-    with {:ok, parameter} <-
-           Parameter.decode(<<type::8, param_length::8, parameter::binary>>, options),
-         do: decode_parameters(rest, [parameter | parameters], options)
+    parameter = Parameter.decode(<<type::8, param_length::8, parameter::binary>>, options)
+    decode_parameters(rest, [parameter | parameters], options)
   end
 
   @impl Encoder

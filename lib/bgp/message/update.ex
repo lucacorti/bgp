@@ -1,7 +1,7 @@
 defmodule BGP.Message.UPDATE do
   @moduledoc false
 
-  alias BGP.Message.Encoder
+  alias BGP.Message.{Encoder, NOTIFICATION}
   alias BGP.Message.UPDATE.Attribute
   alias BGP.Prefix
 
@@ -16,10 +16,9 @@ defmodule BGP.Message.UPDATE do
 
   @impl Encoder
   def decode(data, options) do
-    with {:ok, msg, rest} <- decode_withdrawn_routes(%__MODULE__{}, data, options),
-         {:ok, msg, rest} <- decode_path_attributes(msg, rest, options) do
-      decode_nlri(msg, rest, options)
-    end
+    {msg, rest} = decode_withdrawn_routes(%__MODULE__{}, data, options)
+    {msg, rest} = decode_path_attributes(msg, rest, options)
+    decode_nlri(msg, rest, options)
   end
 
   defp decode_withdrawn_routes(
@@ -27,7 +26,7 @@ defmodule BGP.Message.UPDATE do
          <<length::16, prefixes::binary-size(length), rest::binary>>,
          options
        ) do
-    {:ok, %{msg | withdrawn_routes: decode_prefixes(prefixes, [], options)}, rest}
+    {%{msg | withdrawn_routes: decode_prefixes(prefixes, [], options)}, rest}
   end
 
   defp decode_path_attributes(
@@ -35,7 +34,7 @@ defmodule BGP.Message.UPDATE do
          <<length::16, attributes::binary-size(length), rest::binary>>,
          options
        ) do
-    {:ok, %{msg | path_attributes: decode_attributes(attributes, [], options)}, rest}
+    {%{msg | path_attributes: decode_attributes(attributes, [], options)}, rest}
   end
 
   defp decode_nlri(
@@ -43,29 +42,32 @@ defmodule BGP.Message.UPDATE do
          nlri,
          options
        ) do
-    {:ok, %{msg | nlri: decode_prefixes(nlri, [], options)}}
+    %{msg | nlri: decode_prefixes(nlri, [], options)}
   end
 
   defp decode_attributes(
          <<0::1, 0::1, _partial::1, _extended::1, _unused::4, _rest::binary>>,
          _attributes,
          _options
-       ),
-       do: :error
+       ) do
+    raise NOTIFICATION, code: :update_message, subcode: :malformed_attribute_list
+  end
 
   defp decode_attributes(
          <<0::1, _transitive::1, 1::1, _extended::1, _unused::4, _rest::binary>>,
          _attributes,
          _options
-       ),
-       do: :error
+       ) do
+    raise NOTIFICATION, code: :update_message, subcode: :malformed_attribute_list
+  end
 
   defp decode_attributes(
          <<1::1, 0::1, 1::1, _extended::1, _unused::4, _rest::binary>>,
          _attributes,
          _options
-       ),
-       do: :error
+       ) do
+    raise NOTIFICATION, code: :update_message, subcode: :malformed_attribute_list
+  end
 
   defp decode_attributes(<<>>, attributes, _options),
     do: Enum.reverse(attributes)
@@ -85,9 +87,6 @@ defmodule BGP.Message.UPDATE do
 
       {_, _, :skip} ->
         decode_attributes(rest, attributes, options)
-
-      {_, _, {:error, _reason}} = error ->
-        error
     end
   end
 

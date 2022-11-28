@@ -34,7 +34,7 @@ defmodule BGP.Message.UPDATE.Attribute.Communities do
 
   @impl Encoder
   def decode(<<communities::binary>>, _options),
-    do: {:ok, %__MODULE__{communities: decode_communities(communities, [])}}
+    do: %__MODULE__{communities: decode_communities(communities, [])}
 
   defp decode_communities(<<>>, communities), do: Enum.reverse(communities)
 

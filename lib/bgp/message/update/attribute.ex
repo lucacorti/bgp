@@ -1,7 +1,7 @@
 defmodule BGP.Message.UPDATE.Attribute do
   @moduledoc false
 
-  alias BGP.Message.Encoder
+  alias BGP.Message.{Encoder, NOTIFICATION}
 
   alias BGP.Message.UPDATE.Attribute.{
     Aggregator,
@@ -50,11 +50,15 @@ defmodule BGP.Message.UPDATE.Attribute do
     defp type_for_module(unquote(module)), do: unquote(code)
   end
 
-  defp type_for_module(module), do: raise("Unknown path attribute module #{module}")
+  defp type_for_module(_module) do
+    raise NOTIFICATION, code: :update_message, subcode: :malformed_attribute_list
+  end
 
   for {module, code} <- attributes do
     defp module_for_type(unquote(code)), do: unquote(module)
   end
 
-  defp module_for_type(_code), do: {:error, :unknown}
+  defp module_for_type(_code) do
+    raise NOTIFICATION, code: :update_message, subcode: :malformed_attribute_list
+  end
 end

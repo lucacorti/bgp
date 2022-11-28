@@ -1,8 +1,6 @@
 defmodule BGP.Message.NOTIFICATION do
   @moduledoc false
 
-  alias BGP.Message.Encoder.Error
-
   errors = [
     {
       1,
@@ -103,21 +101,23 @@ defmodule BGP.Message.NOTIFICATION do
         }
 
   @enforce_keys [:code]
-  defstruct code: nil, subcode: :unspecific, data: <<>>
+  defexception code: nil, subcode: :unspecific, data: <<>>
 
   alias BGP.Message.Encoder
 
   @behaviour Encoder
 
+  @impl Exception
+  def message(%__MODULE__{} = exception),
+    do: "#{exception.code} - #{exception.subcode} - #{inspect(exception.data)}"
+
   @impl Encoder
   def decode(<<code::8, subcode::8, data::binary>>, _options),
-    do: {
-      :ok,
-      %__MODULE__{code: decode_code(code), subcode: decode_subcode(code, subcode), data: data}
-    }
+    do: %__MODULE__{code: decode_code(code), subcode: decode_subcode(code, subcode), data: data}
 
-  def decode(_notification, _options),
-    do: {:error, %Error{code: :message_header, subcode: :bad_message_length}}
+  def decode(_notification, _options) do
+    raise __MODULE__, code: :message_header, subcode: :bad_message_length
+  end
 
   @impl Encoder
   def encode(%__MODULE__{code: code, subcode: subcode, data: data}, _options),

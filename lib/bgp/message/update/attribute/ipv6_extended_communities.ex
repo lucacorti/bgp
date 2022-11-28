@@ -42,10 +42,8 @@ defmodule BGP.Message.UPDATE.Attribute.IPV6ExtendedCommunities do
   @behaviour Encoder
 
   @impl Encoder
-  def decode(<<extended_communities::binary>>, _options),
-    do:
-      {:ok,
-       %__MODULE__{extended_communities: decode_extended_communities(extended_communities, [])}}
+  def decode(<<data::binary>>, _options),
+    do: %__MODULE__{extended_communities: decode_extended_communities(data, [])}
 
   defp decode_extended_communities(<<>>, extended_communities),
     do: Enum.reverse(extended_communities)

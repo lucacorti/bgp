@@ -1,6 +1,7 @@
 defmodule BGP.Message.UPDATE.Attribute.NextHop do
   @moduledoc false
 
+  alias BGP.Message.NOTIFICATION
   alias BGP.Prefix
 
   @type t :: %__MODULE__{value: Prefix.t()}
@@ -14,8 +15,13 @@ defmodule BGP.Message.UPDATE.Attribute.NextHop do
 
   @impl Encoder
   def decode(data, _options) do
-    with {:ok, prefix} <- Prefix.decode(data),
-         do: {:ok, %__MODULE__{value: prefix}}
+    case Prefix.decode(data) do
+      {:ok, prefix} ->
+        %__MODULE__{value: prefix}
+
+      :error ->
+        raise NOTIFICATION, code: :update_message
+    end
   end
 
   @impl Encoder

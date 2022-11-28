@@ -1,6 +1,8 @@
 defmodule BGP.Message.UPDATE.Attribute.ASPath do
   @moduledoc false
 
+  alias BGP.Message.{Encoder, NOTIFICATION}
+
   @type type :: :as_set | :as_sequence
   @type length :: non_neg_integer()
   @type t :: %__MODULE__{type: type(), length: length()}
@@ -8,20 +10,17 @@ defmodule BGP.Message.UPDATE.Attribute.ASPath do
   @enforce_keys [:type, :length]
   defstruct length: nil, type: nil, value: []
 
-  alias BGP.Message.Encoder
-
   @behaviour Encoder
 
   @impl Encoder
   def decode(<<type::8, length::8, asns::binary>>, options) do
     four_octets = Keyword.get(options, :four_octets, false)
 
-    {:ok,
-     %__MODULE__{
-       type: decode_type(type),
-       length: length,
-       value: decode_asns(asns, four_octets, [])
-     }}
+    %__MODULE__{
+      type: decode_type(type),
+      length: length,
+      value: decode_asns(asns, four_octets, [])
+    }
   end
 
   defp decode_type(1), do: :as_set
@@ -34,6 +33,10 @@ defmodule BGP.Message.UPDATE.Attribute.ASPath do
 
   defp decode_asns(<<asn::16, rest::binary>>, false = four_octets, asns),
     do: decode_asns(rest, four_octets, [asn | asns])
+
+  defp decode_asns(_data, _four_octets, _asns) do
+    raise NOTIFICATION, code: :update_message
+  end
 
   @impl Encoder
   def encode(%__MODULE__{type: type, length: length, value: value}, options) do
@@ -48,4 +51,8 @@ defmodule BGP.Message.UPDATE.Attribute.ASPath do
 
   defp encode_type(:as_set), do: 1
   defp encode_type(:as_sequence), do: 2
+
+  defp encode_type(_type) do
+    raise NOTIFICATION, code: :update_message
+  end
 end

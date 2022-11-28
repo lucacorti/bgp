@@ -1,8 +1,7 @@
 defmodule BGP.Message.OPEN.Parameter.Capabilities do
   @moduledoc false
 
-  alias BGP.Message.Encoder
-  alias BGP.Message.Encoder.Error
+  alias BGP.Message.{Encoder, NOTIFICATION}
 
   alias BGP.Message.OPEN.Parameter.Capabilities.{
     FourOctetsASN,
@@ -19,8 +18,8 @@ defmodule BGP.Message.OPEN.Parameter.Capabilities do
   @behaviour Encoder
 
   @impl Encoder
-  def decode(capabilities, options),
-    do: {:ok, %__MODULE__{capabilities: decode_capabilities(capabilities, [], options)}}
+  def decode(data, options),
+    do: %__MODULE__{capabilities: decode_capabilities(data, [], options)}
 
   defp decode_capabilities(<<>>, capabilities, _options), do: Enum.reverse(capabilities)
 
@@ -29,9 +28,8 @@ defmodule BGP.Message.OPEN.Parameter.Capabilities do
          capabilities,
          options
        ) do
-    with {:ok, module} <- module_for_type(code),
-         {:ok, capability} <- module.decode(value, options),
-         do: decode_capabilities(rest, [capability | capabilities], options)
+    capability = module_for_type(code).decode(value, options)
+    decode_capabilities(rest, [capability | capabilities], options)
   end
 
   @impl Encoder
@@ -56,11 +54,15 @@ defmodule BGP.Message.OPEN.Parameter.Capabilities do
     defp type_for_module(unquote(module)), do: unquote(code)
   end
 
-  defp type_for_module(module), do: raise("Unknown path attribute module #{module}")
-
-  for {module, code} <- attributes do
-    defp module_for_type(unquote(code)), do: {:ok, unquote(module)}
+  defp type_for_module(_module) do
+    raise NOTIFICATION, code: :open_message
   end
 
-  defp module_for_type(_code), do: {:error, %Error{code: :open_message}}
+  for {module, code} <- attributes do
+    defp module_for_type(unquote(code)), do: unquote(module)
+  end
+
+  defp module_for_type(_code) do
+    raise NOTIFICATION, code: :open_message
+  end
 end

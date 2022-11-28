@@ -18,7 +18,7 @@ defmodule BGP.Server.FSM.Timer do
 
   @spec start(t(), name()) :: t()
   def start({nil, seconds}, name),
-    do: {Process.send_after(self(), {:timer, name, :expires}, seconds * 1_000), seconds}
+    do: {Process.send_after(self(), {:timer, name, :expired}, seconds * 1_000), seconds}
 
   def start({_ref, _seconds} = timer, _name), do: timer
 

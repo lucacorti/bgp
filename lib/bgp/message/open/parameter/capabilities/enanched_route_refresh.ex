@@ -9,7 +9,7 @@ defmodule BGP.Message.OPEN.Parameter.Capabilities.EnanchedRouteRefresh do
   @behaviour Encoder
 
   @impl Encoder
-  def decode(<<>>, _options), do: {:ok, %__MODULE__{}}
+  def decode(<<>>, _options), do: %__MODULE__{}
 
   @impl Encoder
   def encode(_multi_protocol, _options), do: []

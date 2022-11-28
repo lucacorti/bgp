@@ -4,7 +4,7 @@ defmodule BGP.MessageTest do
   alias BGP.Message.{KEEPALIVE, NOTIFICATION, OPEN, UPDATE}
 
   test "KEEPALIVE encode and decode" do
-    assert {:ok, %KEEPALIVE{}} =
+    assert %KEEPALIVE{} =
              %KEEPALIVE{}
              |> BGP.Message.encode([])
              |> IO.iodata_to_binary()
@@ -16,7 +16,7 @@ defmodule BGP.MessageTest do
     subcode = :unspecific
     data = <<>>
 
-    assert {:ok, %NOTIFICATION{code: ^code, subcode: ^subcode, data: ^data}} =
+    assert %NOTIFICATION{code: ^code, subcode: ^subcode, data: ^data} =
              %NOTIFICATION{code: code, subcode: subcode, data: data}
              |> BGP.Message.encode([])
              |> IO.iodata_to_binary()
@@ -28,7 +28,7 @@ defmodule BGP.MessageTest do
     bgp_id = {127, 0, 0, 1}
     hold_time = 90
 
-    assert {:ok, %OPEN{asn: ^asn, bgp_id: ^bgp_id, hold_time: ^hold_time}} =
+    assert %OPEN{asn: ^asn, bgp_id: ^bgp_id, hold_time: ^hold_time} =
              %OPEN{asn: asn, bgp_id: bgp_id, hold_time: hold_time}
              |> BGP.Message.encode([])
              |> IO.iodata_to_binary()
@@ -38,7 +38,7 @@ defmodule BGP.MessageTest do
   test "UPDATE encode and decode" do
     w_r = [{127, 0, 0, 1}, {0, 0, 0, 0}]
 
-    assert {:ok, %UPDATE{withdrawn_routes: ^w_r}} =
+    assert %UPDATE{withdrawn_routes: ^w_r} =
              %UPDATE{withdrawn_routes: w_r}
              |> BGP.Message.encode([])
              |> IO.iodata_to_binary()

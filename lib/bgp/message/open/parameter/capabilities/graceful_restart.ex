@@ -2,7 +2,7 @@ defmodule BGP.Message.OPEN.Parameter.Capabilities.GracefulRestart do
   @moduledoc false
 
   alias BGP.AFN
-  alias BGP.Message.Encoder
+  alias BGP.Message.{Encoder, NOTIFICATION}
 
   @type seconds :: non_neg_integer()
   @type forwarding :: boolean()
@@ -16,7 +16,11 @@ defmodule BGP.Message.OPEN.Parameter.Capabilities.GracefulRestart do
 
   @impl Encoder
   def decode(<<restarted::1, _reserved::3, time::12, rest::binary>>, _options),
-    do: {:ok, %__MODULE__{restarted: restarted == 1, time: time, afs: decode_afs(rest, [])}}
+    do: %__MODULE__{restarted: restarted == 1, time: time, afs: decode_afs(rest, [])}
+
+  def decode(_data, _options) do
+    raise NOTIFICATION, code: :open_message
+  end
 
   defp decode_afs(<<>>, afs), do: Enum.reverse(afs)
 
