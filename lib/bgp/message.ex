@@ -2,6 +2,7 @@ defmodule BGP.Message do
   @moduledoc false
 
   alias BGP.Message.{Encoder, KEEPALIVE, NOTIFICATION, OPEN, ROUTEREFRESH, UPDATE}
+  alias BGP.Server.FSM
 
   @type t :: KEEPALIVE.t() | NOTIFICATION.t() | OPEN.t() | UPDATE.t() | ROUTEREFRESH.t()
 
@@ -58,7 +59,7 @@ defmodule BGP.Message do
     ]
   end
 
-  @spec stream!(iodata(), Encoder.options()) :: Enumerable.t() | no_return()
+  @spec stream!(iodata(), FSM.options()) :: Enumerable.t() | no_return()
   def stream!(data, options) do
     Stream.unfold(data, fn
       <<_marker::@marker_size, length::16, _type::8, _rest::binary>> = data
