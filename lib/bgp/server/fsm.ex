@@ -2,7 +2,7 @@ defmodule BGP.Server.FSM do
   @moduledoc false
 
   alias BGP.{Message, Server}
-  alias BGP.Message.{Encoder, KEEPALIVE, NOTIFICATION, OPEN, UPDATE}
+  alias BGP.Message.{KEEPALIVE, NOTIFICATION, OPEN, UPDATE}
   alias BGP.Message.OPEN.Parameter.Capabilities
   alias BGP.Server.{FSM.Timer, Session}
 
@@ -10,6 +10,8 @@ defmodule BGP.Server.FSM do
 
   @asn_2octets_max 65_535
   @asn_trans 23_456
+
+  @type options :: [extended_message: boolean(), four_octets_asns: boolean()]
 
   @type connection_op :: :connect | :disconnect
   @type msg_op :: :recv | :send
@@ -104,8 +106,8 @@ defmodule BGP.Server.FSM do
     end
   end
 
-  @spec options(t()) :: Encoder.options()
-  def options(%__MODULE__{} = fsm) do
+  @spec get_options(t()) :: options()
+  def get_options(%__MODULE__{} = fsm) do
     [extended_message: fsm.extended_message, four_octets: fsm.four_octets]
   end
 

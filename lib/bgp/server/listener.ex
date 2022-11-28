@@ -40,14 +40,14 @@ defmodule BGP.Server.Listener do
   @impl Handler
   def handle_data(data, socket, %{buffer: buffer, fsm: fsm} = state) do
     (buffer <> data)
-    |> Message.stream!(FSM.options(fsm))
+    |> Message.stream!(FSM.get_options(fsm))
     |> Enum.reduce({:continue, state}, fn {rest, msg}, {:continue, state} ->
       with {:ok, state} <- trigger_event(state, socket, {:msg, msg, :recv}),
            do: {:continue, %{state | buffer: rest}}
     end)
   catch
     {:error, %NOTIFICATION{} = error} ->
-      process_effect(state, socket, {:send, error})
+      process_effect(state, socket, {:msg, error, :send})
       {:close, state}
   end
 
@@ -155,8 +155,8 @@ defmodule BGP.Server.Listener do
 
   defp process_effect(_state, _socket, {:msg, _msg, :recv}), do: :ok
 
-  defp process_effect(%{fsm: fsm} = state, socket, {:send, msg}) do
-    case Socket.send(socket, Message.encode(msg, FSM.options(fsm))) do
+  defp process_effect(%{fsm: fsm} = state, socket, {:msg, msg, :send}) do
+    case Socket.send(socket, Message.encode(msg, FSM.get_options(fsm))) do
       :ok -> :ok
       {:error, _reason} -> {:close, state}
     end
