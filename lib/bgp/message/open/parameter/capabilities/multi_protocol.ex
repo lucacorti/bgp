@@ -12,18 +12,46 @@ defmodule BGP.Message.OPEN.Parameter.Capabilities.MultiProtocol do
   @behaviour Encoder
 
   @impl Encoder
-  def decode(<<afi::16, _reserved::8, safi::8>>, _options),
-    do: %__MODULE__{afi: AFN.decode_afi(afi), safi: AFN.decode_safi(safi)}
+  def decode(<<afi::16, _reserved::8, safi::8>>, _fsm),
+    do: %__MODULE__{afi: decode_afi(afi), safi: decode_safi(safi)}
 
-  def decode(_data, _options) do
+  def decode(_data, _fsm) do
     raise NOTIFICATION, code: :open_message
   end
 
-  @impl Encoder
-  def encode(%__MODULE__{afi: afi, safi: safi}, _options),
-    do: [<<AFN.encode_afi(afi)::16>>, <<0::8>>, <<AFN.encode_safi(safi)::8>>]
+  defp decode_afi(afi) do
+    case AFN.decode_afi(afi) do
+      {:ok, afi} -> afi
+      :error -> raise NOTIFICATION, code: :open_message
+    end
+  end
 
-  def encode(_data, _options) do
+  defp decode_safi(safi) do
+    case AFN.decode_safi(safi) do
+      {:ok, safi} -> safi
+      :error -> raise NOTIFICATION, code: :open_message
+    end
+  end
+
+  @impl Encoder
+  def encode(%__MODULE__{afi: afi, safi: safi}, _fsm),
+    do: [<<encode_afi(afi)::16>>, <<0::8>>, <<encode_safi(safi)::8>>]
+
+  def encode(_data, _fsm) do
     raise NOTIFICATION, code: :open_message
+  end
+
+  defp encode_afi(afi) do
+    case AFN.encode_afi(afi) do
+      {:ok, afi} -> afi
+      :error -> raise NOTIFICATION, code: :open_message
+    end
+  end
+
+  defp encode_safi(safi) do
+    case AFN.encode_safi(safi) do
+      {:ok, safi} -> safi
+      :error -> raise NOTIFICATION, code: :open_message
+    end
   end
 end

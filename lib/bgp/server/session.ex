@@ -13,61 +13,15 @@ defmodule BGP.Server.Session do
 
   @type t :: GenServer.server()
 
-  @options_schema NimbleOptions.new!(
-                    automatic: [
-                      doc: "Automatically start the peering session.",
-                      type: :boolean,
-                      default: true
-                    ],
-                    asn: [
-                      doc: "Peer Autonomous System Number.",
-                      type: :pos_integer,
-                      default: 23_456
-                    ],
-                    bgp_id: [
-                      doc: "Peer BGP ID, IP address.",
-                      type: :string,
-                      required: true
-                    ],
-                    host: [
-                      doc: "Peer IP address as string.",
-                      type: {:custom, Prefix, :parse, []},
-                      required: true
-                    ],
-                    mode: [
-                      doc: "Actively connects to the peer or just waits for a connection.",
-                      type: {:in, [:active, :passive]},
-                      default: :active
-                    ],
-                    port: [
-                      doc: "Peer TCP port.",
-                      type: :integer,
-                      default: 179
-                    ],
-                    server: [
-                      doc: "BGP Server the peer refers to.",
-                      type: :atom,
-                      required: true
-                    ]
-                  )
-
-  @typedoc """
-  Supported options:
-
-  #{NimbleOptions.docs(@options_schema)}
-  """
-  @type options() :: keyword()
-
   def child_spec(opts), do: %{id: __MODULE__, start: {__MODULE__, :start_link, [opts]}}
 
   def start_link(args) do
-    with {:ok, options} <- NimbleOptions.validate(args, @options_schema) do
-      Connection.start_link(__MODULE__, options, name: via(options[:server], options[:host]))
-    end
+    Connection.start_link(
+      __MODULE__,
+      args,
+      name: {:via, Registry, {BGP.Server.Session.Registry, {args[:server], args[:host]}}}
+    )
   end
-
-  defp via(server, host),
-    do: {:via, Registry, {BGP.Server.Session.Registry, {server, host}}}
 
   @spec incoming_connection(t(), BGP.bgp_id()) :: :ok | {:error, :collision}
   def incoming_connection(session, peer_bgp_id),
@@ -90,7 +44,12 @@ defmodule BGP.Server.Session do
 
   @impl Connection
   def init(options) do
-    state = %{buffer: <<>>, options: options, fsm: FSM.new(options), socket: nil}
+    state = %{
+      buffer: <<>>,
+      options: options,
+      fsm: FSM.new(Server.get_config(options[:server]), options),
+      socket: nil
+    }
 
     if options[:automatic] do
       trigger_event(state, {:start, :automatic, options[:mode]})
@@ -103,7 +62,7 @@ defmodule BGP.Server.Session do
   def connect(info, %{options: options} = state) do
     case :gen_tcp.connect(options[:host], options[:port], mode: :binary, active: :once) do
       {:ok, socket} ->
-        Logger.info("Connected on #{info}")
+        Logger.debug("Connected on #{info}")
 
         trigger_event(%{state | socket: socket}, {:tcp_connection, :request_acked})
 
@@ -123,21 +82,34 @@ defmodule BGP.Server.Session do
   end
 
   @impl Connection
-  def handle_call({:incoming_connection, peer_bgp_id}, _from, %{options: options} = state) do
-    server_bgp_id =
-      options
-      |> Keyword.get(:server)
-      |> Server.get_config(:bgp_id)
+  def handle_call(
+        {:incoming_connection, _peer_bgp_id},
+        _from,
+        {_socket, %{fsm: %FSM{state: :established}}} = state
+      ),
+      do: {:reply, {:error, :collision}, state}
+
+  def handle_call(
+        {:incoming_connection, peer_bgp_id},
+        _from,
+        %{options: options, fsm: %FSM{state: fsm_state}} = state
+      )
+      when fsm_state in [:open_confirm, :open_sent] do
+    server_bgp_id = Keyword.fetch!(options, :bgp_id)
 
     if server_bgp_id > peer_bgp_id do
       {:reply, {:error, :collision}, state}
     else
       Logger.warn("SESSION: closing connection to peer due to collision")
 
-      with {:ok, state} <- trigger_event(state, {:open, :collision_dump}),
-           do: {:reply, :ok, state}
+      case trigger_event(state, {:error, :open_collision_dump}) do
+        {:ok, state} -> {:reply, :ok, state}
+        {action, state} -> {action, state}
+      end
     end
   end
+
+  def handle_call({:incoming_connection, _peer_bgp_id}, _from, state), do: {:reply, :ok, state}
 
   def handle_call({:start, :manual}, _from, %{options: options} = state) do
     with {:ok, state} <- trigger_event(state, {:start, :manual, options[:mode]}),
@@ -157,15 +129,15 @@ defmodule BGP.Server.Session do
 
   def handle_info({:tcp, socket, data}, %{buffer: buffer, fsm: fsm, socket: socket} = state) do
     (buffer <> data)
-    |> Message.stream!(FSM.get_options(fsm))
+    |> Message.stream!(fsm)
     |> Enum.reduce({:noreply, state}, fn {rest, msg}, {:noreply, state} ->
-      with {:ok, state} <- trigger_event(state, {:msg, msg, :recv}) do
+      with {:ok, state} <- trigger_event(state, {:recv, msg}) do
         {:noreply, %{state | buffer: rest}}
       end
     end)
   catch
     {:error, %NOTIFICATION{} = error} ->
-      process_effect(state, {:msg, error, :send})
+      process_effect(state, {:send, error})
       {:disconnect, error, state}
   after
     :inet.setopts(socket, active: :once)
@@ -199,35 +171,34 @@ defmodule BGP.Server.Session do
 
   defp process_effect(
          %{options: options, socket: socket} = state,
-         {:msg, %OPEN{bgp_id: bgp_id}, :recv}
+         {:recv, %OPEN{bgp_id: bgp_id}}
        ) do
     server = Keyword.get(options, :server)
     {:ok, {address, _port}} = :inet.peername(socket)
 
-    case Listener.connection_for(server, address) do
-      {:ok, connection} ->
-        case Listener.outbound_connection(connection, bgp_id) do
-          :ok ->
-            Logger.debug("No collision, keeping connection to peer #{address}")
-            :ok
+    with {:ok, connection} <- Listener.connection_for(server, address),
+         :ok <- Listener.outbound_connection(connection, bgp_id) do
+      Logger.debug("SESSION: No collision, keeping connection to peer #{address}")
+      :ok
+    else
+      {:error, :collision} ->
+        Logger.warn("SESSION: Connection to peer #{inspect(address)} collides, closing")
 
-          {:error, :collision} ->
-            Logger.warn("Connection to peer #{inspect(address)} collides, closing")
-
-            with {:ok, _state} <- trigger_event(state, {:open, :collision_dump}),
-                 do: {:close, :collision}
+        case trigger_event(state, {:error, :open_collision_dump}) do
+          {:ok, state} -> {:close, state}
+          {action, state} -> {action, state}
         end
 
       {:error, :not_found} ->
-        Logger.debug("No inbound connection from peer #{inspect(address)}")
+        Logger.debug("SESSION: No inbound connection from peer #{inspect(address)}")
         :ok
     end
   end
 
-  defp process_effect(_state, {:msg, _msg, :recv}), do: :ok
+  defp process_effect(_state, {:recv, _msg}), do: :ok
 
-  defp process_effect(%{fsm: fsm, socket: socket}, {:msg, msg, :send}) do
-    case :gen_tcp.send(socket, Message.encode(msg, FSM.get_options(fsm))) do
+  defp process_effect(%{fsm: fsm, socket: socket}, {:send, msg}) do
+    case :gen_tcp.send(socket, Message.encode(msg, fsm)) do
       :ok -> :ok
       {:error, reason} -> {:disconnect, reason}
     end

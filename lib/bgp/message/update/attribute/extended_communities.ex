@@ -154,7 +154,7 @@ defmodule BGP.Message.UPDATE.Attribute.ExtendedCommunities do
   @behaviour Encoder
 
   @impl Encoder
-  def decode(<<data::binary>>, _options),
+  def decode(<<data::binary>>, _fsm),
     do: %__MODULE__{extended_communities: decode_extended_communities(data, [])}
 
   defp decode_extended_communities(<<>>, extended_communities),
@@ -179,7 +179,7 @@ defmodule BGP.Message.UPDATE.Attribute.ExtendedCommunities do
   defp decode_extended_community(type, subtype), do: {type, subtype}
 
   @impl Encoder
-  def encode(%__MODULE__{extended_communities: extended_communities}, _options),
+  def encode(%__MODULE__{extended_communities: extended_communities}, _fsm),
     do: Enum.map(extended_communities, &encode_extended_community(&1))
 
   defp encode_extended_community({asn, data1, data2}), do: <<asn::32, data1::32, data2::32>>

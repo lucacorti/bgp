@@ -12,20 +12,32 @@ defmodule BGP.Message.UPDATE.Attribute.AS4Aggregator do
   @behaviour Encoder
 
   @impl Encoder
-  def decode(<<asn::32, prefix::binary-size(4)>>, _options),
-    do: %__MODULE__{asn: asn, address: Prefix.decode(prefix)}
+  def decode(<<asn::32, prefix::binary-size(4)>>, _fsm) do
+    case Prefix.decode(prefix) do
+      {:ok, address} ->
+        %__MODULE__{asn: asn, address: address}
+
+      :error ->
+        raise NOTIFICATION, code: :update_message, subcode: :malformed_attribute_list
+    end
+  end
 
   def decode(_data) do
     raise NOTIFICATION, code: :update_message, subcode: :malformed_attribute_list
   end
 
   @impl Encoder
-  def encode(%__MODULE__{asn: asn, address: address}, _options) do
-    with {:ok, prefix, 32 = _length} <- Prefix.encode(address),
-         do: <<asn::32, prefix::binary-size(4)>>
+  def encode(%__MODULE__{asn: asn, address: address}, _fsm) do
+    case Prefix.encode(address) do
+      {:ok, prefix, 32} ->
+        <<asn::32, prefix::binary-size(4)>>
+
+      :error ->
+        raise NOTIFICATION, code: :update_message, subcode: :malformed_attribute_list
+    end
   end
 
-  def encode(_origin, _options) do
+  def encode(_origin, _fsm) do
     raise NOTIFICATION, code: :update_message, subcode: :malformed_attribute_list
   end
 end

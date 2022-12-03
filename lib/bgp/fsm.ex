@@ -4,34 +4,26 @@ defmodule BGP.FSM do
   alias BGP.{FSM.Timer, Message, Server}
   alias BGP.Message.{KEEPALIVE, NOTIFICATION, OPEN, UPDATE}
   alias BGP.Message.OPEN.Parameter.Capabilities
-  alias BGP.Server.Session
 
   require Logger
 
   @asn_2octets_max 65_535
   @asn_trans 23_456
 
-  @type options :: [extended_message: boolean(), four_octets_asns: boolean()]
-
   @type connection_op :: :connect | :disconnect
   @type msg_op :: :recv | :send
-
-  @type effect ::
-          {:msg, Message.t(), msg_op()}
-          | {:tcp_connection, connection_op()}
-
+  @type effect :: {msg_op(), Message.t()} | {:tcp_connection, connection_op()}
   @type start_type :: :manual | :automatic
-  @type stop_type :: start_type()
   @type start_passivity :: :active | :passive
   @type connection_event :: :confirmed | :fails | :request_acked
   @type timer_event :: :expired
 
   @type event ::
-          {:msg, Message.t(), :recv}
-          | {:open, :collision_dump}
+          {msg_op(), Message.t()}
+          | {:error, :open_collision_dump}
           | {:tcp_connection, connection_event()}
           | {:start, start_type(), start_passivity()}
-          | {:stop, stop_type()}
+          | {:stop, start_type()}
           | {:timer, Timer.name(), timer_event()}
 
   @type counter :: pos_integer()
@@ -48,7 +40,7 @@ defmodule BGP.FSM do
           hold_time: BGP.hold_time(),
           internal: boolean(),
           notification_without_open: boolean(),
-          options: Session.options(),
+          options: Server.peer_options(),
           state: state(),
           timers: keyword(Timer.t())
         }
@@ -81,34 +73,27 @@ defmodule BGP.FSM do
               keep_alive: Timer.new(0)
             ]
 
-  @spec new(Session.options()) :: t()
-  def new(options) do
-    options = Server.get_config(options[:server])
-
+  @spec new(Server.options(), Server.peer_options()) :: t()
+  def new(server, peer) do
     struct(__MODULE__,
-      asn: options[:asn],
-      bgp_id: options[:bgp_id],
-      delay_open: options[:delay_open][:enabled],
-      delay_open_time: options[:delay_open][:seconds],
-      hold_time: options[:hold_time][:seconds],
-      notification_without_open: options[:notification_without_open],
-      options: options
+      asn: server[:asn],
+      bgp_id: server[:bgp_id],
+      delay_open: peer[:delay_open][:enabled],
+      delay_open_time: peer[:delay_open][:seconds],
+      hold_time: peer[:hold_time][:seconds],
+      notification_without_open: peer[:notification_without_open],
+      options: peer
     )
   end
 
   @spec event(t(), event()) :: {:ok, t(), [effect()]}
   def event(%{state: old_state} = fsm, event) do
-    Logger.debug("FSM event: #{inspect(event)}")
+    Logger.debug("FSM processing event: #{inspect(event)}")
 
     with {:ok, fsm, effects} <- process_event(fsm, event) do
       Logger.debug("FSM state: #{old_state} -> #{fsm.state}")
       {:ok, fsm, effects}
     end
-  end
-
-  @spec get_options(t()) :: options()
-  def get_options(%__MODULE__{} = fsm) do
-    [extended_message: fsm.extended_message, four_octets: fsm.four_octets]
   end
 
   defp process_event(%__MODULE__{state: :idle} = fsm, {:stop, _type}),
@@ -162,7 +147,7 @@ defmodule BGP.FSM do
       :ok,
       %__MODULE__{fsm | state: :open_sent}
       |> set_timer(:hold_time),
-      [{:msg, compose_open(fsm), :send}]
+      [{:send, compose_open(fsm)}]
     }
   end
 
@@ -192,7 +177,7 @@ defmodule BGP.FSM do
       |> stop_timer(:connect_retry)
       |> set_timer(:connect_retry, 0)
       |> set_timer(:hold_time),
-      [{:msg, compose_open(fsm), :send}]
+      [{:send, compose_open(fsm)}]
     }
   end
 
@@ -217,7 +202,7 @@ defmodule BGP.FSM do
     end
   end
 
-  defp process_event(%__MODULE__{state: :connect} = fsm, {:msg, msg, :recv}) do
+  defp process_event(%__MODULE__{state: :connect} = fsm, {:recv, msg}) do
     delay_open_timer_running = timer_running?(fsm, :delay_open)
 
     case msg do
@@ -242,9 +227,9 @@ defmodule BGP.FSM do
           |> stop_timer(:delay_open)
           |> set_timer(:delay_open, 0),
           [
-            {:msg, open, :recv},
-            {:msg, compose_open(fsm), :send},
-            {:msg, %KEEPALIVE{}, :send}
+            {:recv, open},
+            {:send, compose_open(fsm)},
+            {:send, %KEEPALIVE{}}
           ]
         }
 
@@ -299,7 +284,7 @@ defmodule BGP.FSM do
       |> stop_timer(:connect_retry)
       |> set_timer(:connect_retry, 0),
       [
-        {:msg, %NOTIFICATION{code: :cease}, :send},
+        {:send, %NOTIFICATION{code: :cease}},
         {:tcp_connection, :disconnect}
       ]
     }
@@ -334,7 +319,7 @@ defmodule BGP.FSM do
       |> stop_timer(:delay_open)
       |> set_timer(:delay_open, 0)
       |> set_timer(:hold_time),
-      [{:msg, compose_open(fsm), :send}]
+      [{:send, compose_open(fsm)}]
     }
   end
 
@@ -363,7 +348,7 @@ defmodule BGP.FSM do
       %__MODULE__{fsm | state: :open_sent}
       |> set_timer(:connect_retry, 0)
       |> set_timer(:hold_time),
-      [{:msg, compose_open(fsm), :send}]
+      [{:send, compose_open(fsm)}]
     }
   end
 
@@ -378,7 +363,7 @@ defmodule BGP.FSM do
       []
     }
 
-  defp process_event(%__MODULE__{state: :active} = fsm, {:msg, msg, :recv}) do
+  defp process_event(%__MODULE__{state: :active} = fsm, {:recv, msg}) do
     delay_open_timer_running = timer_running?(fsm, :delay_open)
 
     case msg do
@@ -403,9 +388,9 @@ defmodule BGP.FSM do
           |> stop_timer(:delay_open)
           |> set_timer(:delay_open, 0),
           [
-            {:msg, open, :recv},
-            {:msg, compose_open(fsm), :send},
-            {:msg, %KEEPALIVE{}, :send}
+            {:recv, open},
+            {:send, compose_open(fsm)},
+            {:send, %KEEPALIVE{}}
           ]
         }
 
@@ -451,7 +436,7 @@ defmodule BGP.FSM do
       |> set_timer(:connect_retry, 0)
       |> zero_counter(:connect_retry),
       [
-        {:msg, %NOTIFICATION{code: :cease}, :send}
+        {:send, %NOTIFICATION{code: :cease}}
       ]
     }
   end
@@ -463,7 +448,7 @@ defmodule BGP.FSM do
       |> set_timer(:connect_retry, 0)
       |> increment_counter(:connect_retry),
       [
-        {:msg, %NOTIFICATION{code: :cease}, :send},
+        {:send, %NOTIFICATION{code: :cease}},
         {:tcp_connection, :disconnect}
       ]
     }
@@ -476,7 +461,7 @@ defmodule BGP.FSM do
       |> set_timer(:connect_retry, 0)
       |> increment_counter(:connect_retry),
       [
-        {:msg, %NOTIFICATION{code: :hold_timer_expired}, :send},
+        {:send, %NOTIFICATION{code: :hold_timer_expired}},
         {:tcp_connection, :disconnect}
       ]
     }
@@ -492,20 +477,20 @@ defmodule BGP.FSM do
     }
   end
 
-  defp process_event(%__MODULE__{state: :open_sent} = fsm, {:open, :collision_dump}) do
+  defp process_event(%__MODULE__{state: :open_sent} = fsm, {:error, :open_collision_dump}) do
     {
       :ok,
       %__MODULE__{fsm | state: :idle}
       |> set_timer(:connect_retry, 0)
       |> increment_counter(:connect_retry),
       [
-        {:msg, %NOTIFICATION{code: :cease}, :send},
+        {:send, %NOTIFICATION{code: :cease}},
         {:tcp_connection, :disconnect}
       ]
     }
   end
 
-  defp process_event(%__MODULE__{state: :open_sent} = fsm, {:msg, msg, :recv}) do
+  defp process_event(%__MODULE__{state: :open_sent} = fsm, {:recv, msg}) do
     case msg do
       %OPEN{hold_time: hold_time} = open when hold_time > 0 ->
         {
@@ -517,8 +502,8 @@ defmodule BGP.FSM do
           |> restart_timer(:keep_alive, div(hold_time, 3))
           |> restart_timer(:hold_time, hold_time),
           [
-            {:msg, open, :recv},
-            {:msg, %KEEPALIVE{}, :send}
+            {:recv, open},
+            {:send, %KEEPALIVE{}}
           ]
         }
 
@@ -531,8 +516,8 @@ defmodule BGP.FSM do
           |> set_timer(:connect_retry, 0)
           |> stop_timer(:keep_alive),
           [
-            {:msg, open, :recv},
-            {:msg, %KEEPALIVE{}, :send}
+            {:recv, open},
+            {:send, %KEEPALIVE{}}
           ]
         }
 
@@ -553,7 +538,7 @@ defmodule BGP.FSM do
       |> set_timer(:connect_retry, 0)
       |> increment_counter(:connect_retry),
       [
-        {:msg, %NOTIFICATION{code: :fsm}, :send},
+        {:send, %NOTIFICATION{code: :fsm}},
         {:tcp_connection, :disconnect}
       ]
     }
@@ -569,7 +554,7 @@ defmodule BGP.FSM do
       |> set_timer(:connect_retry, 0)
       |> zero_counter(:connect_retry),
       [
-        {:msg, %NOTIFICATION{code: :cease}, :send},
+        {:send, %NOTIFICATION{code: :cease}},
         {:tcp_connection, :disconnect}
       ]
     }
@@ -582,7 +567,7 @@ defmodule BGP.FSM do
       |> set_timer(:connect_retry, 0)
       |> increment_counter(:connect_retry),
       [
-        {:msg, %NOTIFICATION{code: :cease}, :send},
+        {:send, %NOTIFICATION{code: :cease}},
         {:tcp_connection, :disconnect}
       ]
     }
@@ -595,7 +580,7 @@ defmodule BGP.FSM do
       |> set_timer(:connect_retry, 0)
       |> increment_counter(:connect_retry),
       [
-        {:msg, %NOTIFICATION{code: :hold_timer_expired}, :send},
+        {:send, %NOTIFICATION{code: :hold_timer_expired}},
         {:tcp_connection, :disconnect}
       ]
     }
@@ -607,7 +592,7 @@ defmodule BGP.FSM do
       fsm
       |> restart_timer(:keep_alive),
       [
-        {:msg, %KEEPALIVE{}, :send}
+        {:send, %KEEPALIVE{}}
       ]
     }
   end
@@ -624,7 +609,7 @@ defmodule BGP.FSM do
 
   defp process_event(
          %__MODULE__{state: :open_confirm} = fsm,
-         {:msg, %NOTIFICATION{code: :unsupported_version_number}, :recv}
+         {:recv, %NOTIFICATION{code: :unsupported_version_number}}
        ) do
     {
       :ok,
@@ -634,14 +619,14 @@ defmodule BGP.FSM do
     }
   end
 
-  defp process_event(%__MODULE__{state: :open_confirm} = fsm, {:open, :collision_dump}) do
+  defp process_event(%__MODULE__{state: :open_confirm} = fsm, {:error, :open_collision_dump}) do
     {
       :ok,
       %__MODULE__{fsm | state: :idle}
       |> set_timer(:connect_retry, 0)
       |> increment_counter(:connect_retry),
       [
-        {:msg, %NOTIFICATION{code: :cease}, :send},
+        {:send, %NOTIFICATION{code: :cease}},
         {:tcp_connection, :disconnect}
       ]
     }
@@ -649,7 +634,7 @@ defmodule BGP.FSM do
 
   defp process_event(
          %__MODULE__{hold_time: hold_time, state: :open_confirm} = fsm,
-         {:msg, msg, :recv}
+         {:recv, msg}
        ) do
     case msg do
       %NOTIFICATION{} ->
@@ -668,7 +653,7 @@ defmodule BGP.FSM do
           |> set_timer(:connect_retry, 0)
           |> increment_counter(:connect_retry),
           [
-            {:msg, %NOTIFICATION{code: :cease}, :send}
+            {:send, %NOTIFICATION{code: :cease}}
           ]
         }
 
@@ -689,7 +674,7 @@ defmodule BGP.FSM do
       |> set_timer(:connect_retry, 0)
       |> increment_counter(:connect_retry),
       [
-        {:msg, %NOTIFICATION{code: :fsm}, :send},
+        {:send, %NOTIFICATION{code: :fsm}},
         {:tcp_connection, :disconnect}
       ]
     }
@@ -705,7 +690,7 @@ defmodule BGP.FSM do
       |> set_timer(:connect_retry, 0)
       |> zero_counter(:connect_retry),
       [
-        {:msg, %NOTIFICATION{code: :cease}, :send},
+        {:send, %NOTIFICATION{code: :cease}},
         {:tcp_connection, :disconnect}
       ]
     }
@@ -718,7 +703,7 @@ defmodule BGP.FSM do
       |> set_timer(:connect_retry, 0)
       |> increment_counter(:connect_retry),
       [
-        {:msg, %NOTIFICATION{code: :cease}, :send},
+        {:send, %NOTIFICATION{code: :cease}},
         {:tcp_connection, :disconnect}
       ]
     }
@@ -731,7 +716,7 @@ defmodule BGP.FSM do
       |> set_timer(:connect_retry, 0)
       |> increment_counter(:connect_retry),
       [
-        {:msg, %NOTIFICATION{code: :hold_timer_expired}, :send},
+        {:send, %NOTIFICATION{code: :hold_timer_expired}},
         {:tcp_connection, :disconnect}
       ]
     }
@@ -746,10 +731,10 @@ defmodule BGP.FSM do
         :ok,
         fsm
         |> restart_timer(:keep_alive),
-        [{:msg, %KEEPALIVE{}, :send}]
+        [{:send, %KEEPALIVE{}}]
       }
     else
-      {:ok, fsm, [{:msg, %KEEPALIVE{}, :send}]}
+      {:ok, fsm, [{:send}], %KEEPALIVE{}}
     end
   end
 
@@ -763,14 +748,14 @@ defmodule BGP.FSM do
     }
   end
 
-  defp process_event(%__MODULE__{state: :established} = fsm, {:open, :collision_dump}) do
+  defp process_event(%__MODULE__{state: :established} = fsm, {:error, :open_collision_dump}) do
     {
       :ok,
       %__MODULE__{fsm | state: :idle}
       |> set_timer(:connect_retry, 0)
       |> increment_counter(:connect_retry),
       [
-        {:msg, %NOTIFICATION{code: :cease}, :send},
+        {:send, %NOTIFICATION{code: :cease}},
         {:tcp_connection, :disconnect}
       ]
     }
@@ -778,7 +763,7 @@ defmodule BGP.FSM do
 
   defp process_event(
          %__MODULE__{hold_time: hold_time, state: :established} = fsm,
-         {:msg, msg, :recv}
+         {:recv, msg}
        ) do
     case msg do
       %OPEN{} ->
@@ -788,7 +773,7 @@ defmodule BGP.FSM do
           |> set_timer(:connect_retry, 0)
           |> increment_counter(:connect_retry),
           [
-            {:msg, %NOTIFICATION{code: :cease}, :send},
+            {:send, %NOTIFICATION{code: :cease}},
             {:tcp_connection, :disconnect}
           ]
         }
@@ -818,11 +803,11 @@ defmodule BGP.FSM do
           :ok,
           fsm
           |> restart_timer(:hold_time, hold_time),
-          [{:msg, msg, :recv}]
+          [{:recv, msg}]
         }
 
       {:ok, %UPDATE{} = msg} ->
-        {:ok, fsm, [{:msg, msg, :recv}]}
+        {:ok, fsm, [{:recv}], msg}
     end
   end
 
@@ -832,7 +817,7 @@ defmodule BGP.FSM do
       %__MODULE__{fsm | state: :idle}
       |> set_timer(:connect_retry, 0)
       |> increment_counter(:connect_retry),
-      [{:msg, %NOTIFICATION{code: :fsm}, :send}, {:tcp_connection, :disconnect}]
+      [{:disconnect, %NOTIFICATION{code: :fsm}, :send}, {:tcp_connection}]
     }
   end
 

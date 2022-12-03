@@ -1,8 +1,8 @@
 defmodule BGP.Message.UPDATE.Attribute.Aggregator do
   @moduledoc false
 
+  alias BGP.{FSM, Prefix}
   alias BGP.Message.{Encoder, NOTIFICATION}
-  alias BGP.Prefix
 
   @asn_max :math.pow(2, 16) - 1
   @asn_four_octets_max :math.pow(2, 16) - 1
@@ -15,35 +15,47 @@ defmodule BGP.Message.UPDATE.Attribute.Aggregator do
   @behaviour Encoder
 
   @impl Encoder
-  def decode(aggregator, options) do
-    four_octets = Keyword.get(options, :four_octets, false)
-    decode_aggregator(aggregator, four_octets)
+  def decode(<<asn::32, prefix::binary-size(4)>>, %FSM{four_octets: true})
+      when asn > 0 and asn < @asn_four_octets_max do
+    case Prefix.decode(prefix) do
+      {:ok, address} ->
+        %__MODULE__{asn: asn, address: address}
+
+      :error ->
+        raise NOTIFICATION, code: :update_message, subcode: :malformed_attribute_list
+    end
   end
 
-  def decode_aggregator(<<asn::32, prefix::binary-size(4)>>, true = _four_octets)
-      when asn > 0 and asn < @asn_four_octets_max,
-      do: %__MODULE__{asn: asn, address: Prefix.decode(prefix)}
+  def decode(<<asn::16, prefix::binary-size(4)>>, %FSM{four_octets: false})
+      when asn > 0 and asn < @asn_max do
+    case Prefix.decode(prefix) do
+      {:ok, address} ->
+        %__MODULE__{asn: asn, address: address}
 
-  def decode_aggregator(<<asn::16, prefix::binary-size(4)>>, false = _four_octets)
-      when asn > 0 and asn < @asn_max,
-      do: %__MODULE__{asn: asn, address: Prefix.decode(prefix)}
+      :error ->
+        raise NOTIFICATION, code: :update_message, subcode: :malformed_attribute_list
+    end
+  end
 
-  def decode_aggregator(_aggregator, _four_octets),
-    do: :skip
+  def decode(_aggregator, _fsm), do: :skip
 
   @impl Encoder
-  def encode(%__MODULE__{asn: asn, address: address}, options) do
-    as_length =
-      Enum.find_value(options, 16, fn
-        {:four_octets, true} -> 32
-        _ -> nil
-      end)
+  def encode(%__MODULE__{asn: asn, address: address}, fsm) do
+    asn_length = asn_length(fsm)
 
-    with {:ok, prefix, 32 = _length} <- Prefix.encode(address),
-         do: <<asn::integer-size(as_length), prefix::binary-size(4)>>
+    case Prefix.encode(address) do
+      {:ok, prefix, 32} ->
+        <<asn::integer-size(asn_length), prefix::binary-size(4)>>
+
+      :error ->
+        raise NOTIFICATION, code: :update_message, subcode: :malformed_attribute_list
+    end
   end
 
-  def encode(_origin, _options) do
+  def encode(_origin, _fsm) do
     raise NOTIFICATION, code: :update_message, subcode: :malformed_attribute_list
   end
+
+  defp asn_length(%FSM{four_octets: true}), do: 32
+  defp asn_length(%FSM{four_octets: false}), do: 16
 end

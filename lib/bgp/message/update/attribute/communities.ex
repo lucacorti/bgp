@@ -1,6 +1,8 @@
 defmodule BGP.Message.UPDATE.Attribute.Communities do
   @moduledoc false
 
+  alias BGP.Message.{Encoder, NOTIFICATION}
+
   communities = [
     {0xFFFF0000, :graceful_shutdown},
     {0xFFFF0001, :accept_own},
@@ -28,12 +30,10 @@ defmodule BGP.Message.UPDATE.Attribute.Communities do
   @type t :: %__MODULE__{communities: [community()]}
   defstruct communities: []
 
-  alias BGP.Message.Encoder
-
   @behaviour Encoder
 
   @impl Encoder
-  def decode(<<communities::binary>>, _options),
+  def decode(<<communities::binary>>, _fsm),
     do: %__MODULE__{communities: decode_communities(communities, [])}
 
   defp decode_communities(<<>>, communities), do: Enum.reverse(communities)
@@ -46,10 +46,14 @@ defmodule BGP.Message.UPDATE.Attribute.Communities do
   end
 
   @impl Encoder
-  def encode(%__MODULE__{communities: communities}, _options),
+  def encode(%__MODULE__{communities: communities}, _fsm),
     do: Enum.map(communities, &encode_community(&1))
 
   for {code, community} <- communities do
     defp encode_community(unquote(community)), do: unquote(code)
+  end
+
+  defp encode_community(_community) do
+    raise NOTIFICATION, code: :update_message
   end
 end

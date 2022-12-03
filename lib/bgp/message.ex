@@ -15,10 +15,10 @@ defmodule BGP.Message do
   @behaviour BGP.Message.Encoder
 
   @impl Encoder
-  def decode(<<header::binary-size(@header_size), msg::binary>>, options) do
+  def decode(<<header::binary-size(@header_size), msg::binary>>, fsm) do
     {module, length} = decode_header(header)
-    check_length(module, length, options)
-    module.decode(msg, options)
+    check_length(module, length, fsm)
+    module.decode(msg, fsm)
   end
 
   defp decode_header(<<@marker::@marker_size, length::16, type::8>>)
@@ -30,26 +30,21 @@ defmodule BGP.Message do
     raise NOTIFICATION, code: :message_header, subcode: :connection_not_synchronized
   end
 
-  defp check_length(module, length, _options)
+  defp check_length(module, length, _fsm)
        when module in [KEEPALIVE, OPEN] and length > @max_size do
     raise NOTIFICATION, code: :message_header, subcode: :bad_message_length, data: length
   end
 
-  defp check_length(_module, length, options) do
-    extended_message = Keyword.get(options, :extended_message)
-
-    case {extended_message, length} do
-      {extended, length} when (extended and length > @extended_max_size) or length > @max_size ->
-        raise NOTIFICATION, code: :message_header, subcode: :bad_message_length, data: length
-
-      _ ->
-        :ok
-    end
+  defp check_length(_module, length, %FSM{} = fsm)
+       when (fsm.extended_message and length > @extended_max_size) or length > @max_size do
+    raise NOTIFICATION, code: :message_header, subcode: :bad_message_length, data: length
   end
 
+  defp check_length(_module, _length, _fsm), do: :ok
+
   @impl Encoder
-  def encode(%module{} = message, options) do
-    data = module.encode(message, options)
+  def encode(%module{} = message, fsm) do
+    data = module.encode(message, fsm)
 
     [
       <<@marker::@marker_size>>,
@@ -59,15 +54,15 @@ defmodule BGP.Message do
     ]
   end
 
-  @spec stream!(iodata(), FSM.options()) :: Enumerable.t() | no_return()
-  def stream!(data, options) do
+  @spec stream!(iodata(), FSM.t()) :: Enumerable.t() | no_return()
+  def stream!(data, fsm) do
     Stream.unfold(data, fn
       <<_marker::@marker_size, length::16, _type::8, _rest::binary>> = data
       when byte_size(data) >= length ->
         msg = binary_part(data, 0, length)
         rest_size = byte_size(data) - length
         rest_data = binary_part(data, length, rest_size)
-        {{rest_data, decode(msg, options)}, rest_data}
+        {{rest_data, decode(msg, fsm)}, rest_data}
 
       <<>> ->
         nil

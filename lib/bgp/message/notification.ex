@@ -112,15 +112,15 @@ defmodule BGP.Message.NOTIFICATION do
     do: "#{exception.code} - #{exception.subcode} - #{inspect(exception.data)}"
 
   @impl Encoder
-  def decode(<<code::8, subcode::8, data::binary>>, _options),
+  def decode(<<code::8, subcode::8, data::binary>>, _fsm),
     do: %__MODULE__{code: decode_code(code), subcode: decode_subcode(code, subcode), data: data}
 
-  def decode(_notification, _options) do
+  def decode(_notification, _fsm) do
     raise __MODULE__, code: :message_header, subcode: :bad_message_length
   end
 
   @impl Encoder
-  def encode(%__MODULE__{code: code, subcode: subcode, data: data}, _options),
+  def encode(%__MODULE__{code: code, subcode: subcode, data: data}, _fsm),
     do: [<<encode_code(code)::8>>, <<encode_subcode(code, subcode)::8>>, <<data::binary>>]
 
   for {code, reason, _subcodes} <- errors do

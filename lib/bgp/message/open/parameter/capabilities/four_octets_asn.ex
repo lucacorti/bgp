@@ -10,16 +10,16 @@ defmodule BGP.Message.OPEN.Parameter.Capabilities.FourOctetsASN do
   @behaviour Encoder
 
   @impl Encoder
-  def decode(<<asn::32>>, _options), do: %__MODULE__{asn: asn}
+  def decode(<<asn::32>>, _fsm), do: %__MODULE__{asn: asn}
 
-  def decode(_data, _options) do
+  def decode(_data, _fsm) do
     raise NOTIFICATION, code: :open_message
   end
 
   @impl Encoder
-  def encode(%__MODULE__{asn: asn}, _options), do: [<<asn::32>>]
+  def encode(%__MODULE__{asn: asn}, _fsm), do: [<<asn::32>>]
 
-  def encode(_msg, _options) do
+  def encode(_msg, _fsm) do
     raise NOTIFICATION, code: :open_message
   end
 end

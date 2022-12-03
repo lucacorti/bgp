@@ -9,13 +9,13 @@ defmodule BGP.Message.OPEN.Parameter do
   @behaviour Encoder
 
   @impl Encoder
-  def decode(<<type::8, length::8, data::binary-size(length)>>, options) do
-    module_for_type(type).decode(data, options)
+  def decode(<<type::8, length::8, data::binary-size(length)>>, fsm) do
+    module_for_type(type).decode(data, fsm)
   end
 
   @impl Encoder
-  def encode(%module{} = message, options) do
-    data = module.encode(message, options)
+  def encode(%module{} = message, fsm) do
+    data = module.encode(message, fsm)
 
     [<<type_for_module(module)::8>>, <<IO.iodata_length(data)::8>>, data]
   end

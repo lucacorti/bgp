@@ -14,19 +14,24 @@ defmodule BGP.Message.UPDATE.Attribute.NextHop do
   @behaviour Encoder
 
   @impl Encoder
-  def decode(data, _options) do
+  def decode(data, _fsm) do
     case Prefix.decode(data) do
       {:ok, prefix} ->
         %__MODULE__{value: prefix}
 
       :error ->
-        raise NOTIFICATION, code: :update_message
+        raise NOTIFICATION, code: :update_message, subcode: :malformed_attribute_list
     end
   end
 
   @impl Encoder
-  def encode(%__MODULE__{value: value}, _options) do
-    with {:ok, prefix, length} <- Prefix.encode(value),
-         do: [<<length::8>>, prefix]
+  def encode(%__MODULE__{value: value}, _fsm) do
+    case Prefix.encode(value) do
+      {:ok, prefix, length} ->
+        [<<length::8>>, prefix]
+
+      :error ->
+        raise NOTIFICATION, code: :update_message, subcode: :malformed_attribute_list
+    end
   end
 end

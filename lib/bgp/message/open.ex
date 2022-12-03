@@ -1,9 +1,9 @@
 defmodule BGP.Message.OPEN do
   @moduledoc false
 
+  alias BGP.{FSM, Prefix}
   alias BGP.Message.Encoder
   alias BGP.Message.{NOTIFICATION, OPEN.Parameter}
-  alias BGP.Prefix
 
   @asn_min 1
   @asn_max :math.pow(2, 16) - 1
@@ -25,9 +25,9 @@ defmodule BGP.Message.OPEN do
   def decode(
         <<version::8, asn::16, hold_time::16, bgp_id::binary-size(4), params_length::8,
           params::binary-size(params_length)>>,
-        options
+        fsm
       ) do
-    with :ok <- check_asn(asn, options),
+    with :ok <- check_asn(asn, fsm),
          :ok <- check_hold_time(hold_time),
          :ok <- check_version(version),
          {:ok, bgp_id} <- decode_bgp_id(bgp_id) do
@@ -35,29 +35,31 @@ defmodule BGP.Message.OPEN do
         asn: asn,
         bgp_id: bgp_id,
         hold_time: hold_time,
-        parameters: decode_parameters(params, [], options)
+        parameters: decode_parameters(params, [], fsm)
       }
     end
   end
 
-  def decode(_keepalive, _options) do
+  def decode(_keepalive, _fsm) do
     raise NOTIFICATION, code: :message_header, subcode: :bad_message_length
   end
 
-  defp check_asn(asn, options) do
-    four_octets = Keyword.get(options, :four_octets, false)
+  defp check_asn(asn, %FSM{four_octets: true})
+       when asn >= @asn_min and asn <= @asn_four_octets_max,
+       do: :ok
 
-    case {four_octets, asn} do
-      {true, asn} when asn >= @asn_min and asn <= @asn_four_octets_max -> :ok
-      {false, asn} when asn >= @asn_min and asn <= @asn_max -> :ok
-      _ -> raise NOTIFICATION, code: :open_message, subcode: :bad_peer_as
-    end
+  defp check_asn(asn, %FSM{four_octets: false}) when asn >= @asn_min and asn <= @asn_max,
+    do: :ok
+
+  defp check_asn(_asn, _fsm) do
+    raise NOTIFICATION, code: :open_message, subcode: :bad_peer_as
   end
 
   defp check_hold_time(hold_time) when hold_time == 0 or hold_time >= @hold_time_min, do: :ok
 
-  defp check_hold_time(_hold_time),
-    do: raise(NOTIFICATION, code: :open_message, subcode: :unacceptable_hold_time)
+  defp check_hold_time(_hold_time) do
+    raise NOTIFICATION, code: :open_message, subcode: :unacceptable_hold_time
+  end
 
   defp check_version(4), do: :ok
 
@@ -78,28 +80,32 @@ defmodule BGP.Message.OPEN do
     end
   end
 
-  defp decode_parameters(<<>> = _data, params, _options), do: Enum.reverse(params)
+  defp decode_parameters(<<>> = _data, params, _fsm), do: Enum.reverse(params)
 
   defp decode_parameters(
          <<type::8, param_length::8, parameter::binary-size(param_length), rest::binary>>,
          parameters,
-         options
+         fsm
        ) do
-    parameter = Parameter.decode(<<type::8, param_length::8, parameter::binary>>, options)
-    decode_parameters(rest, [parameter | parameters], options)
+    parameter = Parameter.decode(<<type::8, param_length::8, parameter::binary>>, fsm)
+    decode_parameters(rest, [parameter | parameters], fsm)
   end
 
   @impl Encoder
   def encode(%__MODULE__{parameters: parameters} = msg, options) do
-    with {:ok, bgp_id, 32} <- Prefix.encode(msg.bgp_id) do
-      {data, length} = encode_parameters(parameters, options)
-      [<<4::8>>, <<msg.asn::16>>, <<msg.hold_time::16>>, bgp_id, <<length::8>>, data]
+    case Prefix.encode(msg.bgp_id) do
+      {:ok, bgp_id, 32} ->
+        {data, length} = encode_parameters(parameters, options)
+        [<<4::8>>, <<msg.asn::16>>, <<msg.hold_time::16>>, bgp_id, <<length::8>>, data]
+
+      :error ->
+        raise NOTIFICATION, code: :open_message
     end
   end
 
-  defp encode_parameters(parameters, options) do
+  defp encode_parameters(parameters, fsm) do
     Enum.map_reduce(parameters, 0, fn parameter, total ->
-      data = Parameter.encode(parameter, options)
+      data = Parameter.encode(parameter, fsm)
       {data, total + IO.iodata_length(data)}
     end)
   end

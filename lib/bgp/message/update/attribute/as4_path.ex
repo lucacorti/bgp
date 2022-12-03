@@ -13,7 +13,7 @@ defmodule BGP.Message.UPDATE.Attribute.AS4Path do
   @behaviour Encoder
 
   @impl Encoder
-  def decode(<<type::8, length::8, asns::binary>>, _options),
+  def decode(<<type::8, length::8, asns::binary>>, _fsm),
     do: %__MODULE__{type: decode_type(type), length: length, value: decode_asns([], asns)}
 
   defp decode_type(1), do: :as_set
@@ -31,8 +31,8 @@ defmodule BGP.Message.UPDATE.Attribute.AS4Path do
   end
 
   @impl Encoder
-  def encode(%__MODULE__{type: type, length: length, value: value}, _options),
-    do: [<<encode_type(type)::8, length::8>>, Enum.map(value, &<<&1::32>>)]
+  def encode(%__MODULE__{type: type, length: length, value: value}, _fsm),
+    do: [<<encode_type(type)::8>>, <<length::8>>, Enum.map(value, &<<&1::32>>)]
 
   defp encode_type(:as_set), do: 1
   defp encode_type(:as_sequence), do: 2

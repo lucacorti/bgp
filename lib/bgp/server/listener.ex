@@ -26,11 +26,11 @@ defmodule BGP.Server.Listener do
     do: GenServer.call(handler, {:outbound_connection, peer_bgp_id})
 
   @impl Handler
-  def handle_connection(socket, server: server) do
-    state = %{buffer: <<>>, fsm: FSM.new(Server.get_config(server)), server: server}
+  def handle_connection(socket, server) do
+    state = %{buffer: <<>>, fsm: nil, server: server}
     %{address: address} = Socket.peer_info(socket)
 
-    with {:ok, peer} <- get_configured_peer(state, server, address),
+    with {:ok, state, peer} <- get_configured_peer(state, server, address),
          {:ok, state} <- trigger_event(state, socket, {:start, :automatic, :passive}),
          {:ok, state} <- trigger_event(state, socket, {:tcp_connection, :confirmed}),
          :ok <- register_handler(state, server, peer),
@@ -40,58 +40,63 @@ defmodule BGP.Server.Listener do
   @impl Handler
   def handle_data(data, socket, %{buffer: buffer, fsm: fsm} = state) do
     (buffer <> data)
-    |> Message.stream!(FSM.get_options(fsm))
+    |> Message.stream!(fsm)
     |> Enum.reduce({:continue, state}, fn {rest, msg}, {:continue, state} ->
-      with {:ok, state} <- trigger_event(state, socket, {:msg, msg, :recv}),
+      with {:ok, state} <- trigger_event(state, socket, {:recv, msg}),
            do: {:continue, %{state | buffer: rest}}
     end)
   catch
     {:error, %NOTIFICATION{} = error} ->
-      process_effect(state, socket, {:msg, error, :send})
+      process_effect(state, socket, {:send, error})
       {:close, state}
   end
 
   @impl GenServer
   def handle_info({:timer, _timer, :expired} = event, {socket, state}) do
     case trigger_event(state, socket, event) do
-      {:ok, state} ->
-        {:noreply, {socket, state}}
-
-      {action, state} ->
-        {:stop, {:error, action}, {socket, state}}
+      {:ok, state} -> {:noreply, {socket, state}}
+      {action, state} -> {:stop, {:error, action}, {socket, state}}
     end
   end
 
   @impl GenServer
   def handle_call(
+        {:outbound_connection, _peer_bgp_id},
+        _from,
+        {socket, %{fsm: %FSM{state: :established}} = state}
+      ),
+      do: {:reply, {:error, :collision}, {socket, state}}
+
+  def handle_call(
         {:outbound_connection, peer_bgp_id},
         _from,
-        {socket, %{options: options} = state}
-      ) do
+        {socket, %{options: options, fsm: %FSM{state: fsm_state}} = state}
+      )
+      when fsm_state in [:open_confirm, :open_sent] do
     server_bgp_id =
-      options
-      |> Keyword.get(:server)
-      |> Server.get_config(:bgp_id)
+      options[:server]
+      |> Server.get_config()
+      |> Keyword.fetch!(:bgp_id)
 
     if server_bgp_id > peer_bgp_id do
       {:reply, {:error, :collision}, {socket, state}}
     else
       Logger.warn("LISTENER: closing connection to peer due to collision")
 
-      case trigger_event(state, socket, {:open, :collision_dump}) do
-        {:ok, state} ->
-          {:stop, :normal, :ok, {socket, state}}
-
-        {action, state} ->
-          {:stop, {:error, action}, :ok, {socket, state}}
+      case trigger_event(state, socket, {:error, :open_collision_dump}) do
+        {:ok, state} -> {:stop, :normal, :ok, {socket, state}}
+        {action, state} -> {:stop, {:error, action}, :ok, {socket, state}}
       end
     end
   end
 
+  def handle_call({:incoming_connection, _peer_bgp_id}, _from, {socket, state}),
+    do: {:reply, :ok, {socket, state}}
+
   defp get_configured_peer(state, server, address) do
     case Server.get_peer(server, address) do
       {:ok, peer} ->
-        {:ok, peer}
+        {:ok, %{state | fsm: FSM.new(Server.get_config(server), peer)}, peer}
 
       {:error, :not_found} ->
         Logger.warn("LISTENER: dropping connection, no configured peer for #{inspect(address)}")
@@ -100,14 +105,12 @@ defmodule BGP.Server.Listener do
   end
 
   defp register_handler(state, server, peer) do
-    host = Keyword.get(peer, :host)
-
-    case Registry.register(BGP.Server.Listener.Registry, {server, host}, nil) do
+    case Registry.register(BGP.Server.Listener.Registry, {server, peer[:host]}, nil) do
       {:ok, _pid} ->
         :ok
 
       {:error, _reason} ->
-        Logger.warn("LISTENER: dropping connection, connection already exists for #{host}")
+        Logger.warn("LISTENER: dropping connection, connection already exists for #{peer[:host]}")
         {:close, state}
     end
   end
@@ -133,30 +136,32 @@ defmodule BGP.Server.Listener do
     end)
   end
 
-  defp process_effect(%{server: server} = state, socket, {:msg, %OPEN{} = open, :recv}) do
+  defp process_effect(%{server: server} = state, socket, {:recv, %OPEN{} = open}) do
     %{address: address} = Socket.peer_info(socket)
 
     with {:ok, session} <- Session.session_for(server, address),
          :ok <- Session.incoming_connection(session, open.bgp_id) do
-      Logger.debug("No collision, keeping connection from peer #{inspect(address)}")
+      Logger.debug("LISTENER: No collision, keeping connection from peer #{inspect(address)}")
       :ok
     else
       {:error, :collision} ->
-        Logger.warn("Connection from peer #{inspect(address)} collides, closing")
+        Logger.warn("LISTENER: Connection from peer #{inspect(address)} collides, closing")
 
-        with {:ok, state} <- trigger_event(state, socket, {:open, :collision_dump}),
-             do: {:close, state}
+        case trigger_event(state, socket, {:error, :open_collision_dump}) do
+          {:ok, state} -> {:close, state}
+          {action, state} -> {action, state}
+        end
 
       {:error, :not_found} ->
-        Logger.warn("No configured session for peer #{inspect(address)}, closing")
+        Logger.warn("LISTENER: No configured session for peer #{inspect(address)}, closing")
         {:close, state}
     end
   end
 
-  defp process_effect(_state, _socket, {:msg, _msg, :recv}), do: :ok
+  defp process_effect(_state, _socket, {:recv, _msg}), do: :ok
 
-  defp process_effect(%{fsm: fsm} = state, socket, {:msg, msg, :send}) do
-    case Socket.send(socket, Message.encode(msg, FSM.get_options(fsm))) do
+  defp process_effect(%{fsm: fsm} = state, socket, {:send, msg}) do
+    case Socket.send(socket, Message.encode(msg, fsm)) do
       :ok -> :ok
       {:error, _reason} -> {:close, state}
     end

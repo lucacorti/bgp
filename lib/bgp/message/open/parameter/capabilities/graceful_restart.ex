@@ -14,18 +14,32 @@ defmodule BGP.Message.OPEN.Parameter.Capabilities.GracefulRestart do
   @behaviour Encoder
 
   @impl Encoder
-  def decode(<<restarted::1, _reserved::3, time::12, rest::binary>>, _options),
+  def decode(<<restarted::1, _reserved::3, time::12, rest::binary>>, _fsm),
     do: %__MODULE__{restarted: restarted == 1, time: time, afs: decode_afs(rest, [])}
 
-  def decode(_data, _options) do
+  def decode(_data, _fsm) do
     raise NOTIFICATION, code: :open_message
   end
 
   defp decode_afs(<<>>, afs), do: Enum.reverse(afs)
 
   defp decode_afs(<<afi::16, safi::8, forwarding::1, _reserved::7, rest::binary>>, afs),
-    do: decode_afs(rest, [{AFN.decode_afi(afi), AFN.decode_safi(safi), forwarding == 1} | afs])
+    do: decode_afs(rest, [{decode_afi(afi), decode_safi(safi), forwarding == 1} | afs])
+
+  defp decode_afi(afi) do
+    case AFN.decode_afi(afi) do
+      {:ok, afi} -> afi
+      :error -> raise NOTIFICATION, code: :open_message
+    end
+  end
+
+  defp decode_safi(safi) do
+    case AFN.decode_safi(safi) do
+      {:ok, safi} -> safi
+      :error -> raise NOTIFICATION, code: :open_message
+    end
+  end
 
   @impl Encoder
-  def encode(_multi_protocol, _options), do: []
+  def encode(_multi_protocol, _fsm), do: []
 end

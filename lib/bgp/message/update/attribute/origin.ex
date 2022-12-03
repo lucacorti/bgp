@@ -12,20 +12,20 @@ defmodule BGP.Message.UPDATE.Attribute.Origin do
   @behaviour Encoder
 
   @impl Encoder
-  def decode(<<0::8>>, _options), do: %__MODULE__{origin: :igp}
-  def decode(<<1::8>>, _options), do: %__MODULE__{origin: :egp}
-  def decode(<<2::8>>, _options), do: %__MODULE__{origin: :incomplete}
+  def decode(<<0::8>>, _fsm), do: %__MODULE__{origin: :igp}
+  def decode(<<1::8>>, _fsm), do: %__MODULE__{origin: :egp}
+  def decode(<<2::8>>, _fsm), do: %__MODULE__{origin: :incomplete}
 
-  def decode(_data, _options) do
+  def decode(_data, _fsm) do
     raise NOTIFICATION, code: :update_message, subcode: :malformed_attribute_list
   end
 
   @impl Encoder
-  def encode(%__MODULE__{origin: :igp}, _options), do: <<0::8>>
-  def encode(%__MODULE__{origin: :egp}, _options), do: <<1::8>>
-  def encode(%__MODULE__{origin: :incomplete}, _options), do: <<2::8>>
+  def encode(%__MODULE__{origin: :igp}, _fsm), do: <<0::8>>
+  def encode(%__MODULE__{origin: :egp}, _fsm), do: <<1::8>>
+  def encode(%__MODULE__{origin: :incomplete}, _fsm), do: <<2::8>>
 
-  def encode(_origin, _options) do
+  def encode(_origin, _fsm) do
     raise NOTIFICATION, code: :update_message, subcode: :malformed_attribute_list
   end
 end

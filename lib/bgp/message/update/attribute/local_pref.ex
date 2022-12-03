@@ -11,16 +11,16 @@ defmodule BGP.Message.UPDATE.Attribute.LocalPref do
   @behaviour Encoder
 
   @impl Encoder
-  def decode(<<local_pref::32>>, _options), do: %__MODULE__{value: local_pref}
+  def decode(<<local_pref::32>>, _fsm), do: %__MODULE__{value: local_pref}
 
-  def decode(_data, _options) do
+  def decode(_data, _fsm) do
     raise NOTIFICATION, code: :update_message, subcode: :malformed_attribute_list
   end
 
   @impl Encoder
-  def encode(%__MODULE__{value: local_pref}, _options), do: <<local_pref::32>>
+  def encode(%__MODULE__{value: local_pref}, _fsm), do: <<local_pref::32>>
 
-  def encode(_origin, _options) do
+  def encode(_origin, _fsm) do
     raise NOTIFICATION, code: :update_message, subcode: :malformed_attribute_list
   end
 end

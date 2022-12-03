@@ -20,12 +20,12 @@ defmodule BGP.Message.UPDATE.Attribute do
   @behaviour Encoder
 
   @impl Encoder
-  def decode(<<code::8, data::binary>>, options),
-    do: module_for_type(code).decode(data, options)
+  def decode(<<code::8, data::binary>>, fsm),
+    do: module_for_type(code).decode(data, fsm)
 
   @impl Encoder
-  def encode(%module{} = message, options) do
-    data = module.encode(message, options)
+  def encode(%module{} = message, fsm) do
+    data = module.encode(message, fsm)
 
     [<<IO.iodata_length(data)::16>>, <<type_for_module(module)::8>>, data]
   end
