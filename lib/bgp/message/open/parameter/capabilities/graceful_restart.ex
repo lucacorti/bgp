@@ -1,8 +1,7 @@
 defmodule BGP.Message.OPEN.Parameter.Capabilities.GracefulRestart do
   @moduledoc false
 
-  alias BGP.AFN
-  alias BGP.Message.{Encoder, NOTIFICATION}
+  alias BGP.Message.{AFN, Encoder, NOTIFICATION}
 
   @type seconds :: non_neg_integer()
   @type forwarding :: boolean()

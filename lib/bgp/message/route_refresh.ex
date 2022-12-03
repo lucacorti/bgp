@@ -1,8 +1,7 @@
 defmodule BGP.Message.ROUTEREFRESH do
   @moduledoc false
 
-  alias BGP.AFN
-  alias BGP.Message.{Encoder, NOTIFICATION}
+  alias BGP.Message.{AFN, Encoder, NOTIFICATION}
 
   @type subtype :: :route_refresh | :borr | :eorr
   @type t :: %__MODULE__{afi: AFN.afi(), safi: AFN.safi()}

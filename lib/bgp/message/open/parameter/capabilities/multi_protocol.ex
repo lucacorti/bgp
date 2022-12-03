@@ -1,8 +1,7 @@
 defmodule BGP.Message.OPEN.Parameter.Capabilities.MultiProtocol do
   @moduledoc false
 
-  alias BGP.AFN
-  alias BGP.Message.{Encoder, NOTIFICATION}
+  alias BGP.Message.{AFN, Encoder, NOTIFICATION}
 
   @type t :: %__MODULE__{afi: AFN.afi(), safi: AFN.safi()}
   @enforce_keys [:afi, :safi]
