@@ -1,7 +1,7 @@
 defmodule BGP.Message.Encoder do
   @moduledoc false
 
-  alias BGP.Server.FSM
+  alias BGP.FSM
 
   @type t :: struct()
   @type data :: iodata()

@@ -5,9 +5,9 @@ defmodule BGP.Server.Session do
 
   use Connection
 
-  alias BGP.{Message, Prefix, Server}
+  alias BGP.{FSM, Message, Prefix, Server}
   alias BGP.Message.{NOTIFICATION, OPEN}
-  alias BGP.Server.{FSM, Listener}
+  alias BGP.Server.Listener
 
   require Logger
 

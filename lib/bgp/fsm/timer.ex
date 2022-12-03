@@ -1,4 +1,4 @@
-defmodule BGP.Server.FSM.Timer do
+defmodule BGP.FSM.Timer do
   @moduledoc false
 
   @type name :: atom()

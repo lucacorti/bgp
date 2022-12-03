@@ -1,10 +1,10 @@
-defmodule BGP.Server.FSM do
+defmodule BGP.FSM do
   @moduledoc false
 
-  alias BGP.{Message, Server}
+  alias BGP.{FSM.Timer, Message, Server}
   alias BGP.Message.{KEEPALIVE, NOTIFICATION, OPEN, UPDATE}
   alias BGP.Message.OPEN.Parameter.Capabilities
-  alias BGP.Server.{FSM.Timer, Session}
+  alias BGP.Server.Session
 
   require Logger
 

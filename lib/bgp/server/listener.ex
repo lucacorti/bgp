@@ -5,9 +5,9 @@ defmodule BGP.Server.Listener do
 
   use Handler
 
-  alias BGP.{Message, Prefix, Server}
+  alias BGP.{FSM, Message, Prefix, Server}
   alias BGP.Message.{NOTIFICATION, OPEN}
-  alias BGP.Server.{FSM, Session}
+  alias BGP.Server.Session
 
   require Logger
 
