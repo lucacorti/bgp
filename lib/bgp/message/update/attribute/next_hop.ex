@@ -20,7 +20,7 @@ defmodule BGP.Message.UPDATE.Attribute.NextHop do
         %__MODULE__{value: prefix}
 
       :error ->
-        raise NOTIFICATION, code: :update_message, subcode: :malformed_attribute_list
+        raise NOTIFICATION, code: :update_message, subcode: :invalid_nexthop_attribute
     end
   end
 
@@ -31,7 +31,7 @@ defmodule BGP.Message.UPDATE.Attribute.NextHop do
         [<<length::8>>, prefix]
 
       :error ->
-        raise NOTIFICATION, code: :update_message, subcode: :malformed_attribute_list
+        raise NOTIFICATION, code: :update_message, subcode: :invalid_nexthop_attribute
     end
   end
 end

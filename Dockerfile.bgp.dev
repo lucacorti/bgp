@@ -8,10 +8,13 @@ RUN apt-get update && apt-get install -y \
     curl \
     flex \
     git \
+    libevent-dev \
+    libmnl-dev \
     libreadline-dev \
     libncurses5-dev \
     libtool \
     m4 \
+    net-tools \
     unzip \
     byacc \
     procps
@@ -29,12 +32,11 @@ RUN mkdir /etc/bgpd
 
 WORKDIR /root
 
-RUN git clone https://github.com/openbgpd-portable/openbgpd-portable.git
-
-RUN cd /root/openbgpd-portable && \
+RUN git clone https://github.com/openbgpd-portable/openbgpd-portable.git  && \
+    cd /root/openbgpd-portable && \
     ./autogen.sh && \
     YACC=byacc ./configure --sysconfdir=/etc/bgpd && \
     make && \
     make install
 
-CMD /usr/local/sbin/bgpd -f /etc/bgpd/bgpd.conf -d
+CMD /usr/local/sbin/bgpd -f /etc/bgpd/bgpd.conf -dv

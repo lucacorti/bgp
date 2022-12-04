@@ -26,6 +26,9 @@ services:
     image: openbgpd:latest
     container_name: openbgpd
     restart: always
+    cap_add:
+      - NET_ADMIN
+      - SYS_MODULE
     volumes:
       - ./bgpd:/etc/bgpd:rw
     networks:

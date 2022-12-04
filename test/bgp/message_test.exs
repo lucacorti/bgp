@@ -41,10 +41,11 @@ defmodule BGP.MessageTest do
   end
 
   test "UPDATE encode and decode", %{fsm: fsm} do
-    w_r = [{127, 0, 0, 1}, {0, 0, 0, 0}]
+    w_r = [{1, 0, 0, 0}]
+    nlri = [{2, 0, 0, 0}]
 
-    assert %UPDATE{withdrawn_routes: ^w_r} =
-             %UPDATE{withdrawn_routes: w_r}
+    assert %UPDATE{withdrawn_routes: ^w_r, nlri: ^nlri} =
+             %UPDATE{withdrawn_routes: w_r, nlri: nlri}
              |> BGP.Message.encode(fsm)
              |> IO.iodata_to_binary()
              |> BGP.Message.decode(fsm)

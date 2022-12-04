@@ -82,11 +82,11 @@ defmodule BGP.Message.UPDATE do
     <<length::integer-size(length_size), attribute::binary-size(length), rest::binary>> = data
 
     case Attribute.decode(<<code::8, attribute::binary>>, fsm) do
-      {:ok, attribute} ->
-        decode_attributes(rest, [attribute | attributes], fsm)
-
       :skip ->
         decode_attributes(rest, attributes, fsm)
+
+      attribute ->
+        decode_attributes(rest, [attribute | attributes], fsm)
     end
   end
 
@@ -97,12 +97,16 @@ defmodule BGP.Message.UPDATE do
          prefixes,
          fsm
        ) do
-    case Prefix.decode(prefix) do
+    padding_length = rem(length, 8)
+    <<_padding::binary-unit(1)-size(padding_length), unpadded::binary>> = rest
+    fill_length = 32 - (length + padding_length)
+
+    case Prefix.decode(<<prefix::binary, 0::size(fill_length)>>) do
       {:ok, prefix} ->
-        decode_prefixes(rest, [prefix | prefixes], fsm)
+        decode_prefixes(unpadded, [prefix | prefixes], fsm)
 
       :error ->
-        raise NOTIFICATION, code: :update_message
+        raise NOTIFICATION, code: :update_message, data: prefix
     end
   end
 

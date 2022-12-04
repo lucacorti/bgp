@@ -88,8 +88,6 @@ defmodule BGP.FSM do
 
   @spec event(t(), event()) :: {:ok, t(), [effect()]}
   def event(%{state: old_state} = fsm, event) do
-    Logger.debug("FSM processing event: #{inspect(event)}")
-
     with {:ok, fsm, effects} <- process_event(fsm, event) do
       Logger.debug("FSM state: #{old_state} -> #{fsm.state}")
       {:ok, fsm, effects}

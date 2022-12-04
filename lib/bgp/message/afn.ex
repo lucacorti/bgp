@@ -41,6 +41,7 @@ defmodule BGP.Message.AFN do
     def encode_afi(unquote(afi)), do: {:ok, unquote(code)}
   end
 
+  def encode_afi(65_535), do: {:ok, :reserved}
   def encode_afi(_afi), do: :error
 
   @spec encode_safi(safi()) :: {:ok, code()} | :error
@@ -48,5 +49,6 @@ defmodule BGP.Message.AFN do
     def encode_safi(unquote(safi)), do: {:ok, unquote(code)}
   end
 
+  def encode_safi(255), do: {:ok, :reserved}
   def encode_safi(_safi), do: :error
 end

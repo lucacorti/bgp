@@ -156,9 +156,9 @@ defmodule BGP.Server.Session do
   end
 
   defp process_effects(state, effects) do
-    Logger.debug("SESSION: Processing FSM effects: #{inspect(effects)}")
-
     Enum.reduce(effects, {:ok, state}, fn effect, return ->
+      Logger.debug("SESSION: Processing FSM effect: #{inspect(effect)}")
+
       case process_effect(state, effect) do
         :ok ->
           return
