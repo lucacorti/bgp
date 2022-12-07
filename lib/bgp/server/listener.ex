@@ -16,7 +16,7 @@ defmodule BGP.Server.Listener do
   @spec connection_for(Server.t(), IP.Address.t()) ::
           {:ok, GenServer.server()} | {:error, :not_found}
   def connection_for(server, host) do
-    case Registry.lookup(BGP.Server.Listener.Registry, {server, host}) do
+    case Registry.lookup(Module.concat(server, Listener.Registry), host) do
       [] -> {:error, :not_found}
       [{pid, _value}] -> {:ok, pid}
     end
@@ -107,7 +107,7 @@ defmodule BGP.Server.Listener do
   end
 
   defp register_handler(state, server, peer) do
-    case Registry.register(BGP.Server.Listener.Registry, {server, peer[:host]}, nil) do
+    case Registry.register(Module.concat(server, Listener.Registry), peer[:host], nil) do
       {:ok, _pid} ->
         :ok
 
@@ -155,8 +155,11 @@ defmodule BGP.Server.Listener do
           {action, state} -> {action, state}
         end
 
-      {:error, _reason} ->
-        Logger.warn("LISTENER: No configured session for peer #{inspect(address)}, closing")
+      {:error, reason} ->
+        Logger.warn(
+          "LISTENER: No configured session for peer #{inspect(address)}, closing (#{reason})"
+        )
+
         {:close, state}
     end
   end

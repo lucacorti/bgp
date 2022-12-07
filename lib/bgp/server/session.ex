@@ -19,7 +19,11 @@ defmodule BGP.Server.Session do
     Connection.start_link(
       __MODULE__,
       args,
-      name: {:via, Registry, {BGP.Server.Session.Registry, {args[:server], args[:host]}}}
+      name: {
+        :via,
+        Registry,
+        {Module.concat(args[:server], Session.Registry), args[:host]}
+      }
     )
   end
 
@@ -36,7 +40,7 @@ defmodule BGP.Server.Session do
   @spec session_for(BGP.Server.t(), IP.Address.t()) ::
           {:ok, GenServer.server()} | {:error, :not_found}
   def session_for(server, host) do
-    case Registry.lookup(BGP.Server.Session.Registry, {server, host}) do
+    case Registry.lookup(Module.concat(server, Session.Registry), host) do
       [] -> {:error, :not_found}
       [{pid, _value}] -> {:ok, pid}
     end

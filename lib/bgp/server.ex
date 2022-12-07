@@ -166,6 +166,8 @@ defmodule BGP.Server do
 
     Supervisor.init(
       [
+        {Registry, keys: :unique, name: Module.concat(args[:server], Listener.Registry)},
+        {Registry, keys: :unique, name: Module.concat(args[:server], Session.Registry)},
         {
           ThousandIsland,
           port: args[:port], handler_module: BGP.Server.Listener, handler_options: args[:server]
