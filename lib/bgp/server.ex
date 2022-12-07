@@ -3,8 +3,6 @@ defmodule BGP.Server do
 
   use Supervisor
 
-  alias BGP.Prefix
-
   @type t :: module()
 
   @server_schema NimbleOptions.new!(
@@ -15,7 +13,7 @@ defmodule BGP.Server do
                    ],
                    bgp_id: [
                      doc: "Server BGP ID, IP address as string.",
-                     type: {:custom, Prefix, :parse, []},
+                     type: {:custom, IP.Address, :from_string, []},
                      required: true
                    ],
                    port: [
@@ -68,7 +66,7 @@ defmodule BGP.Server do
                  ],
                  host: [
                    doc: "Peer IP address as string.",
-                   type: {:custom, Prefix, :parse, []},
+                   type: {:custom, IP.Address, :from_string, []},
                    required: true
                  ],
                  keep_alive: [
@@ -134,7 +132,7 @@ defmodule BGP.Server do
     |> Keyword.put(:server, server)
   end
 
-  @spec get_peer(t(), Prefix.t()) :: {:ok, keyword()} | {:error, :not_found}
+  @spec get_peer(t(), IP.Address.t()) :: {:ok, keyword()} | {:error, :not_found}
   def get_peer(server, host) do
     server
     |> get_config()

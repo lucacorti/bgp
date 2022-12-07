@@ -2,9 +2,8 @@ defmodule BGP.Message.UPDATE.Attribute.NextHop do
   @moduledoc false
 
   alias BGP.Message.NOTIFICATION
-  alias BGP.Prefix
 
-  @type t :: %__MODULE__{value: Prefix.t()}
+  @type t :: %__MODULE__{value: IP.Address.t()}
 
   @enforce_keys [:value]
   defstruct value: nil
@@ -14,24 +13,19 @@ defmodule BGP.Message.UPDATE.Attribute.NextHop do
   @behaviour Encoder
 
   @impl Encoder
-  def decode(data, _fsm) do
-    case Prefix.decode(data) do
+  def decode(address, _fsm) do
+    case IP.Address.from_binary(address) do
       {:ok, prefix} ->
         %__MODULE__{value: prefix}
 
-      :error ->
+      {:error, _reason} ->
         raise NOTIFICATION, code: :update_message, subcode: :invalid_nexthop_attribute
     end
   end
 
   @impl Encoder
   def encode(%__MODULE__{value: value}, _fsm) do
-    case Prefix.encode(value) do
-      {:ok, prefix, 32} ->
-        [<<32::8>>, prefix]
-
-      :error ->
-        raise NOTIFICATION, code: :update_message, subcode: :invalid_nexthop_attribute
-    end
+    prefix = IP.Address.to_integer(value)
+    [<<32::8>>, <<prefix::32>>]
   end
 end

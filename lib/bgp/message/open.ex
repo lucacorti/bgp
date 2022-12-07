@@ -1,8 +1,7 @@
 defmodule BGP.Message.OPEN do
   @moduledoc false
 
-  alias BGP.{FSM, Prefix}
-  alias BGP.Message.Encoder
+  alias BGP.{FSM, Message.Encoder}
   alias BGP.Message.{NOTIFICATION, OPEN.Parameter}
 
   @asn_min 1
@@ -12,7 +11,7 @@ defmodule BGP.Message.OPEN do
 
   @type t :: %__MODULE__{
           asn: BGP.asn(),
-          bgp_id: Prefix.t(),
+          bgp_id: IP.Address.t(),
           hold_time: BGP.hold_time(),
           parameters: [Parameter.t()]
         }
@@ -71,7 +70,7 @@ defmodule BGP.Message.OPEN do
   end
 
   defp decode_bgp_id(bgp_id) do
-    case Prefix.decode(bgp_id) do
+    case IP.Address.from_binary(bgp_id) do
       {:ok, prefix} ->
         {:ok, prefix}
 
@@ -93,14 +92,9 @@ defmodule BGP.Message.OPEN do
 
   @impl Encoder
   def encode(%__MODULE__{parameters: parameters} = msg, options) do
-    case Prefix.encode(msg.bgp_id) do
-      {:ok, bgp_id, 32} ->
-        {data, length} = encode_parameters(parameters, options)
-        [<<4::8>>, <<msg.asn::16>>, <<msg.hold_time::16>>, bgp_id, <<length::8>>, data]
-
-      :error ->
-        raise NOTIFICATION, code: :open_message
-    end
+    {data, length} = encode_parameters(parameters, options)
+    bgp_id = IP.Address.to_integer(msg.bgp_id)
+    [<<4::8>>, <<msg.asn::16>>, <<msg.hold_time::16>>, <<bgp_id::32>>, <<length::8>>, data]
   end
 
   defp encode_parameters(parameters, fsm) do

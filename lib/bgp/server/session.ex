@@ -5,7 +5,7 @@ defmodule BGP.Server.Session do
 
   use Connection
 
-  alias BGP.{FSM, Message, Prefix, Server}
+  alias BGP.{FSM, Message, Server}
   alias BGP.Message.{NOTIFICATION, OPEN}
   alias BGP.Server.Listener
 
@@ -33,7 +33,7 @@ defmodule BGP.Server.Session do
   @spec manual_stop(t()) :: :ok | {:error, :already_stopped}
   def manual_stop(session), do: Connection.call(session, {:stop, :manual})
 
-  @spec session_for(BGP.Server.t(), Prefix.t()) ::
+  @spec session_for(BGP.Server.t(), IP.Address.t()) ::
           {:ok, GenServer.server()} | {:error, :not_found}
   def session_for(server, host) do
     case Registry.lookup(BGP.Server.Session.Registry, {server, host}) do
@@ -60,7 +60,9 @@ defmodule BGP.Server.Session do
 
   @impl Connection
   def connect(info, %{options: options} = state) do
-    case :gen_tcp.connect(options[:host], options[:port], mode: :binary, active: :once) do
+    host = IP.Address.to_string(options[:host]) |> String.to_charlist()
+
+    case :gen_tcp.connect(host, options[:port], mode: :binary, active: :once) do
       {:ok, socket} ->
         Logger.debug("Connected on #{info}")
 
@@ -176,7 +178,8 @@ defmodule BGP.Server.Session do
     server = Keyword.get(options, :server)
     {:ok, {address, _port}} = :inet.peername(socket)
 
-    with {:ok, connection} <- Listener.connection_for(server, address),
+    with {:ok, host} <- IP.Address.from_tuple(address),
+         {:ok, connection} <- Listener.connection_for(server, host),
          :ok <- Listener.outbound_connection(connection, bgp_id) do
       Logger.debug("SESSION: No collision, keeping connection to peer #{address}")
       :ok
@@ -189,7 +192,7 @@ defmodule BGP.Server.Session do
           {action, state} -> {action, state}
         end
 
-      {:error, :not_found} ->
+      {:error, _reason} ->
         Logger.debug("SESSION: No inbound connection from peer #{inspect(address)}")
         :ok
     end

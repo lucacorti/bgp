@@ -5,7 +5,7 @@ defmodule BGP.Server.Listener do
 
   use Handler
 
-  alias BGP.{FSM, Message, Prefix, Server}
+  alias BGP.{FSM, Message, Server}
   alias BGP.Message.{NOTIFICATION, OPEN}
   alias BGP.Server.Session
 
@@ -13,7 +13,8 @@ defmodule BGP.Server.Listener do
 
   @type t :: GenServer.server()
 
-  @spec connection_for(Server.t(), Prefix.t()) :: {:ok, GenServer.server()} | {:error, :not_found}
+  @spec connection_for(Server.t(), IP.Address.t()) ::
+          {:ok, GenServer.server()} | {:error, :not_found}
   def connection_for(server, host) do
     case Registry.lookup(BGP.Server.Listener.Registry, {server, host}) do
       [] -> {:error, :not_found}
@@ -21,7 +22,7 @@ defmodule BGP.Server.Listener do
     end
   end
 
-  @spec outbound_connection(t(), Prefix.t()) :: :ok | {:error, :collision}
+  @spec outbound_connection(t(), IP.Address.t()) :: :ok | {:error, :collision}
   def outbound_connection(handler, peer_bgp_id),
     do: GenServer.call(handler, {:outbound_connection, peer_bgp_id})
 
@@ -30,7 +31,8 @@ defmodule BGP.Server.Listener do
     state = %{buffer: <<>>, fsm: nil, server: server}
     %{address: address} = Socket.peer_info(socket)
 
-    with {:ok, state, peer} <- get_configured_peer(state, server, address),
+    with {:ok, host} <- IP.Address.from_tuple(address),
+         {:ok, state, peer} <- get_configured_peer(state, server, host),
          {:ok, state} <- trigger_event(state, socket, {:start, :automatic, :passive}),
          {:ok, state} <- trigger_event(state, socket, {:tcp_connection, :confirmed}),
          :ok <- register_handler(state, server, peer),
@@ -139,7 +141,8 @@ defmodule BGP.Server.Listener do
   defp process_effect(%{server: server} = state, socket, {:recv, %OPEN{} = open}) do
     %{address: address} = Socket.peer_info(socket)
 
-    with {:ok, session} <- Session.session_for(server, address),
+    with {:ok, host} <- IP.Address.from_tuple(address),
+         {:ok, session} <- Session.session_for(server, host),
          :ok <- Session.incoming_connection(session, open.bgp_id) do
       Logger.debug("LISTENER: No collision, keeping connection from peer #{inspect(address)}")
       :ok
@@ -152,7 +155,7 @@ defmodule BGP.Server.Listener do
           {action, state} -> {action, state}
         end
 
-      {:error, :not_found} ->
+      {:error, _reason} ->
         Logger.warn("LISTENER: No configured session for peer #{inspect(address)}, closing")
         {:close, state}
     end

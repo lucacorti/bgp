@@ -4,6 +4,8 @@ defmodule BGP.MessageTest do
   alias BGP.FSM
   alias BGP.Message.{KEEPALIVE, NOTIFICATION, OPEN, UPDATE}
 
+  import IP.Sigil
+
   setup_all _ctx do
     %{fsm: FSM.new([asn: 65_000, bgp_id: {192, 168, 1, 1}], [])}
   end
@@ -30,7 +32,7 @@ defmodule BGP.MessageTest do
 
   test "OPEN encode and decode", %{fsm: fsm} do
     asn = 100
-    bgp_id = {127, 0, 0, 1}
+    bgp_id = ~i(127.0.0.1)
     hold_time = 90
 
     assert %OPEN{asn: ^asn, bgp_id: ^bgp_id, hold_time: ^hold_time} =
@@ -42,16 +44,16 @@ defmodule BGP.MessageTest do
 
   test "UPDATE encode and decode", %{fsm: fsm} do
     prefixes = [
-      {0, {0, 0, 0, 0}},
-      {8, {1, 0, 0, 0}},
-      {12, {2, 16, 0, 0}},
-      {16, {3, 4, 0, 0}},
-      {20, {4, 5, 16, 0}},
-      {22, {4, 6, 20, 0}},
-      {24, {5, 6, 7, 0}},
-      {28, {6, 7, 8, 16}},
-      {29, {7, 8, 9, 8}},
-      {32, {8, 9, 10, 20}}
+      ~i(0.0.0.0/0),
+      ~i(1.0.0.0/8),
+      ~i(2.16.0.0/12),
+      ~i(3.4.0.0/16),
+      ~i(4.5.16.0/20),
+      ~i(4.6.20.0/22),
+      ~i(5.6.7.0/24),
+      ~i(6.7.8.16/28),
+      ~i(7.8.9.8/29),
+      ~i(8.9.10.20/32)
     ]
 
     assert %UPDATE{withdrawn_routes: ^prefixes, nlri: ^prefixes} =

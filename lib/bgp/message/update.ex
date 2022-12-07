@@ -1,14 +1,12 @@
 defmodule BGP.Message.UPDATE do
   @moduledoc false
 
-  alias BGP.Message.{Encoder, NOTIFICATION}
-  alias BGP.Message.UPDATE.Attribute
-  alias BGP.Prefix
+  alias BGP.Message.{Encoder, NOTIFICATION, UPDATE.Attribute}
 
   @type t :: %__MODULE__{
-          withdrawn_routes: [{Prefix.size(), Prefix.t()}],
+          withdrawn_routes: [IP.Prefix.t()],
           path_attributes: [Encoder.t()],
-          nlri: [{Prefix.size(), Prefix.t()}]
+          nlri: [IP.Prefix.t()]
         }
   defstruct withdrawn_routes: [], path_attributes: [], nlri: []
 
@@ -78,8 +76,8 @@ defmodule BGP.Message.UPDATE do
          attributes,
          fsm
        ) do
-    size = 8 + 8 * extended
-    <<length::integer-size(size), attribute::binary-size(length), rest::binary>> = data
+    <<length::integer-size(8 + 8 * extended), attribute::binary-size(length), rest::binary>> =
+      data
 
     case Attribute.decode(<<code::8, attribute::binary>>, fsm) do
       :skip ->
@@ -116,11 +114,13 @@ defmodule BGP.Message.UPDATE do
        do: decode_prefixes(rest, [decode_prefix(length, prefix) | prefixes], fsm)
 
   defp decode_prefix(length, prefix) do
-    case Prefix.decode(<<prefix::binary-unit(1)-size(length), 0::unit(1)-size(32 - length)>>) do
-      {:ok, prefix} ->
-        {length, prefix}
+    case IP.Address.from_binary(
+           <<prefix::binary-unit(1)-size(length), 0::unit(1)-size(32 - length)>>
+         ) do
+      {:ok, address} ->
+        IP.Prefix.new(address, length)
 
-      :error ->
+      {:error, _reason} ->
         raise NOTIFICATION, code: :update_message, data: prefix
     end
   end
@@ -159,27 +159,22 @@ defmodule BGP.Message.UPDATE do
   end
 
   defp encode_prefixes(prefixes, _fsm) do
-    Enum.map_reduce(prefixes, 0, fn {mask, prefix}, length ->
-      {data, data_length} = encode_prefix(mask, prefix)
+    Enum.map_reduce(prefixes, 0, fn prefix, length ->
+      {data, data_length} = encode_prefix(prefix)
       {data, length + div(data_length, 8)}
     end)
   end
 
-  defp encode_prefix(mask, prefix) do
-    case Prefix.encode(prefix) do
-      {:ok, encoded, _prefix_length} ->
-        padding = if rem(mask, 8) > 0, do: 8 - rem(mask, 8), else: 0
+  defp encode_prefix(prefix) do
+    address = IP.Prefix.first(prefix)
+    integer = IP.Address.to_integer(address)
+    encoded = <<integer::unit(32)-size(1)>>
+    length = IP.Prefix.length(prefix)
+    padding = if rem(length, 8) > 0, do: 8 - rem(length, 8), else: 0
 
-        {
-          [
-            <<mask::8>>,
-            <<encoded::binary-unit(1)-size(mask), 0::unit(1)-size(padding)>>
-          ],
-          8 + mask + padding
-        }
-
-      :error ->
-        raise NOTIFICATION, code: :update_message
-    end
+    {
+      [<<length::8>>, <<encoded::binary-unit(1)-size(length), 0::unsigned-size(padding)>>],
+      8 + length + padding
+    }
   end
 end
