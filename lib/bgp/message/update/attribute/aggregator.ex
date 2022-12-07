@@ -45,7 +45,7 @@ defmodule BGP.Message.UPDATE.Attribute.Aggregator do
 
     case Prefix.encode(address) do
       {:ok, prefix, 32} ->
-        <<asn::integer-size(asn_length), prefix::binary-size(4)>>
+        [<<asn::size(asn_length)>>, prefix]
 
       :error ->
         raise NOTIFICATION, code: :update_message, subcode: :malformed_attribute_list

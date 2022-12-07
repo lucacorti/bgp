@@ -27,8 +27,8 @@ defmodule BGP.Message.UPDATE.Attribute.NextHop do
   @impl Encoder
   def encode(%__MODULE__{value: value}, _fsm) do
     case Prefix.encode(value) do
-      {:ok, prefix, length} ->
-        [<<length::8>>, prefix]
+      {:ok, prefix, 32} ->
+        [<<32::8>>, prefix]
 
       :error ->
         raise NOTIFICATION, code: :update_message, subcode: :invalid_nexthop_attribute

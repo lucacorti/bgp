@@ -30,7 +30,7 @@ defmodule BGP.Message.UPDATE.Attribute.AS4Aggregator do
   def encode(%__MODULE__{asn: asn, address: address}, _fsm) do
     case Prefix.encode(address) do
       {:ok, prefix, 32} ->
-        <<asn::32, prefix::binary-size(4)>>
+        [<<asn::32>>, prefix]
 
       :error ->
         raise NOTIFICATION, code: :update_message, subcode: :malformed_attribute_list

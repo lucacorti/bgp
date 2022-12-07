@@ -6,9 +6,9 @@ defmodule BGP.Message.UPDATE do
   alias BGP.Prefix
 
   @type t :: %__MODULE__{
-          withdrawn_routes: [Prefix.t()],
+          withdrawn_routes: [{Prefix.size(), Prefix.t()}],
           path_attributes: [Encoder.t()],
-          nlri: [Prefix.t()]
+          nlri: [{Prefix.size(), Prefix.t()}]
         }
   defstruct withdrawn_routes: [], path_attributes: [], nlri: []
 
@@ -78,8 +78,8 @@ defmodule BGP.Message.UPDATE do
          attributes,
          fsm
        ) do
-    length_size = 8 + 8 * extended
-    <<length::integer-size(length_size), attribute::binary-size(length), rest::binary>> = data
+    <<length::integer-size(8 + 8 * extended), attribute::binary-size(length), rest::binary>> =
+      data
 
     case Attribute.decode(<<code::8, attribute::binary>>, fsm) do
       :skip ->
@@ -93,17 +93,32 @@ defmodule BGP.Message.UPDATE do
   defp decode_prefixes(<<>>, prefixes, _fsm), do: Enum.reverse(prefixes)
 
   defp decode_prefixes(
-         <<length::8, prefix::binary-unit(1)-size(length), rest::binary>>,
+         <<
+           length::8,
+           prefix::binary-unit(1)-size(length),
+           rest::binary
+         >>,
          prefixes,
          fsm
-       ) do
-    padding_length = rem(length, 8)
-    <<_padding::binary-unit(1)-size(padding_length), unpadded::binary>> = rest
-    fill_length = 32 - (length + padding_length)
+       )
+       when rem(length, 8) == 0,
+       do: decode_prefixes(rest, [decode_prefix(length, prefix) | prefixes], fsm)
 
-    case Prefix.decode(<<prefix::binary, 0::size(fill_length)>>) do
+  defp decode_prefixes(
+         <<
+           length::8,
+           prefix::binary-unit(1)-size(length + 8 - rem(length, 8)),
+           rest::binary
+         >>,
+         prefixes,
+         fsm
+       ),
+       do: decode_prefixes(rest, [decode_prefix(length, prefix) | prefixes], fsm)
+
+  defp decode_prefix(length, prefix) do
+    case Prefix.decode(<<prefix::binary-unit(1)-size(length), 0::unit(1)-size(32 - length)>>) do
       {:ok, prefix} ->
-        decode_prefixes(unpadded, [prefix | prefixes], fsm)
+        {length, prefix}
 
       :error ->
         raise NOTIFICATION, code: :update_message, data: prefix
@@ -144,14 +159,27 @@ defmodule BGP.Message.UPDATE do
   end
 
   defp encode_prefixes(prefixes, _fsm) do
-    Enum.map_reduce(prefixes, 0, fn prefix, length ->
-      case Prefix.encode(prefix) do
-        {:ok, prefix, prefix_length} ->
-          {[<<prefix_length::8>>, prefix], length + 1 + div(prefix_length, 8)}
-
-        :error ->
-          raise NOTIFICATION, code: :update_message
-      end
+    Enum.map_reduce(prefixes, 0, fn {mask, prefix}, length ->
+      {data, data_length} = encode_prefix(mask, prefix)
+      {data, length + data_length}
     end)
+  end
+
+  defp encode_prefix(mask, prefix) do
+    case Prefix.encode(prefix) do
+      {:ok, encoded, _prefix_length} ->
+        padding = if(rem(mask, 8) > 0, do: 1, else: 0)
+
+        {
+          [
+            <<mask::8>>,
+            <<encoded::binary-size(div(mask, 8)), 0::unit(8)-size(padding)>>
+          ],
+          1 + div(mask, 8) + padding
+        }
+
+      :error ->
+        raise NOTIFICATION, code: :update_message
+    end
   end
 end
