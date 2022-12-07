@@ -161,21 +161,21 @@ defmodule BGP.Message.UPDATE do
   defp encode_prefixes(prefixes, _fsm) do
     Enum.map_reduce(prefixes, 0, fn {mask, prefix}, length ->
       {data, data_length} = encode_prefix(mask, prefix)
-      {data, length + data_length}
+      {data, length + div(data_length, 8)}
     end)
   end
 
   defp encode_prefix(mask, prefix) do
     case Prefix.encode(prefix) do
       {:ok, encoded, _prefix_length} ->
-        padding = if(rem(mask, 8) > 0, do: 1, else: 0)
+        padding = if rem(mask, 8) > 0, do: 8 - rem(mask, 8), else: 0
 
         {
           [
             <<mask::8>>,
-            <<encoded::binary-size(div(mask, 8)), 0::unit(8)-size(padding)>>
+            <<encoded::binary-unit(1)-size(mask), 0::unit(1)-size(padding)>>
           ],
-          1 + div(mask, 8) + padding
+          8 + mask + padding
         }
 
       :error ->
