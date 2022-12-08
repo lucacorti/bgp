@@ -155,22 +155,25 @@ defmodule BGP.Server do
 
   @impl Supervisor
   def init(args) do
+    server = args[:server]
+
     peers =
       Enum.map(
         args[:peers],
         &{BGP.Server.Session,
          &1
          |> NimbleOptions.validate!(@peer_schema)
-         |> Keyword.put(:server, args[:server])}
+         |> Keyword.put(:server, server)}
       )
 
     Supervisor.init(
       [
-        {Registry, keys: :unique, name: Module.concat(args[:server], Listener.Registry)},
-        {Registry, keys: :unique, name: Module.concat(args[:server], Session.Registry)},
+        {Registry, keys: :unique, name: Module.concat(server, Listener.Registry)},
+        {Registry, keys: :unique, name: Module.concat(server, Session.Registry)},
+        {BGP.Server.RDE, server: server},
         {
           ThousandIsland,
-          port: args[:port], handler_module: BGP.Server.Listener, handler_options: args[:server]
+          port: args[:port], handler_module: BGP.Server.Listener, handler_options: server
         }
         | peers
       ],

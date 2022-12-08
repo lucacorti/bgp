@@ -95,4 +95,63 @@ defmodule BGP.Message do
   defp module_for_type(type) do
     raise NOTIFICATION, code: :message_header, subcode: :bad_message_type, data: <<type::8>>
   end
+
+  @spec decode_prefixes(binary()) :: [IP.Prefix.t()]
+  def decode_prefixes(data), do: decode_prefixes(data, [])
+
+  defp decode_prefixes(<<>>, prefixes), do: Enum.reverse(prefixes)
+
+  defp decode_prefixes(
+         <<
+           length::8,
+           prefix::binary-unit(1)-size(length),
+           rest::binary
+         >>,
+         prefixes
+       )
+       when rem(length, 8) == 0,
+       do: decode_prefixes(rest, [decode_prefix(length, prefix) | prefixes])
+
+  defp decode_prefixes(
+         <<
+           length::8,
+           prefix::binary-unit(1)-size(length + 8 - rem(length, 8)),
+           rest::binary
+         >>,
+         prefixes
+       ),
+       do: decode_prefixes(rest, [decode_prefix(length, prefix) | prefixes])
+
+  defp decode_prefix(length, prefix) do
+    case IP.Address.from_binary(
+           <<prefix::binary-unit(1)-size(length), 0::unit(1)-size(32 - length)>>
+         ) do
+      {:ok, address} ->
+        IP.Prefix.new(address, length)
+
+      {:error, _reason} ->
+        raise NOTIFICATION, code: :update_message, data: prefix
+    end
+  end
+
+  @spec encode_prefixes([IP.Prefix.t()]) :: {iodata(), pos_integer()}
+  def encode_prefixes(prefixes) do
+    Enum.map_reduce(prefixes, 0, fn prefix, length ->
+      {data, data_length} = encode_prefix(prefix)
+      {data, length + div(data_length, 8)}
+    end)
+  end
+
+  def encode_prefix(prefix) do
+    address = IP.Prefix.first(prefix)
+    integer = IP.Address.to_integer(address)
+    encoded = <<integer::unit(32)-size(1)>>
+    length = IP.Prefix.length(prefix)
+    padding = if rem(length, 8) > 0, do: 8 - rem(length, 8), else: 0
+
+    {
+      [<<length::8>>, <<encoded::binary-unit(1)-size(length), 0::unsigned-size(padding)>>],
+      8 + length + padding
+    }
+  end
 end

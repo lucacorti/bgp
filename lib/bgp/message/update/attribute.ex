@@ -12,6 +12,8 @@ defmodule BGP.Message.UPDATE.Attribute do
     Communities,
     LargeCommunities,
     LocalPref,
+    MpReachNLRI,
+    MpUnreachNLRI,
     MultiExitDisc,
     NextHop,
     Origin
@@ -39,6 +41,8 @@ defmodule BGP.Message.UPDATE.Attribute do
     {AtomicAggregate, 6},
     {Aggregator, 7},
     {Communities, 8},
+    {MpReachNLRI, 14},
+    {MpUnreachNLRI, 15},
     {ExtendedCommunities, 16},
     {AS4Path, 17},
     {AS4Aggregator, 18},

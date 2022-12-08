@@ -838,9 +838,9 @@ defmodule BGP.FSM do
   defp compose_open_asn(%__MODULE__{asn: asn}) when asn < @asn_2octets_max, do: asn
   defp compose_open_asn(_fsm), do: @asn_trans
 
-  defp process_open(%__MODULE__{} = fsm, %OPEN{} = open) do
+  defp process_open(fsm, %OPEN{} = open) do
     Enum.reduce(open.parameters, fsm, fn
-      %Capabilities{capabilities: capabilities}, %__MODULE__{} = fsm ->
+      %Capabilities{capabilities: capabilities}, fsm ->
         process_open_capabilities(fsm, capabilities)
 
       _parameter, fsm ->
@@ -850,11 +850,11 @@ defmodule BGP.FSM do
 
   defp process_open_capabilities(fsm, capabilities) do
     Enum.reduce(capabilities, fsm, fn
-      %Capabilities.ExtendedMessage{}, %__MODULE__{} = fsm ->
-        %{fsm | extended_message: true}
+      %Capabilities.ExtendedMessage{}, fsm ->
+        %__MODULE__{fsm | extended_message: true}
 
-      %Capabilities.FourOctetsASN{asn: asn}, %__MODULE__{} = fsm ->
-        %{fsm | four_octets: true, internal: asn == fsm.asn}
+      %Capabilities.FourOctetsASN{asn: asn}, fsm ->
+        %__MODULE__{fsm | four_octets: true, internal: asn == fsm.asn}
 
       _capability, fsm ->
         fsm

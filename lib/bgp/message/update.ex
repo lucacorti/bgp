@@ -1,6 +1,7 @@
 defmodule BGP.Message.UPDATE do
   @moduledoc false
 
+  alias BGP.Message
   alias BGP.Message.{Encoder, NOTIFICATION, UPDATE.Attribute}
 
   @type t :: %__MODULE__{
@@ -14,17 +15,16 @@ defmodule BGP.Message.UPDATE do
 
   @impl Encoder
   def decode(data, fsm) do
-    {msg, rest} = decode_withdrawn_routes(%__MODULE__{}, data, fsm)
+    {msg, rest} = decode_withdrawn_routes(%__MODULE__{}, data)
     {msg, rest} = decode_path_attributes(msg, rest, fsm)
-    decode_nlri(msg, rest, fsm)
+    %{msg | nlri: Message.decode_prefixes(rest)}
   end
 
   defp decode_withdrawn_routes(
          %__MODULE__{} = msg,
-         <<length::16, prefixes::binary-size(length), rest::binary>>,
-         fsm
+         <<length::16, prefixes::binary-size(length), rest::binary>>
        ) do
-    {%{msg | withdrawn_routes: decode_prefixes(prefixes, [], fsm)}, rest}
+    {%{msg | withdrawn_routes: Message.decode_prefixes(prefixes)}, rest}
   end
 
   defp decode_path_attributes(
@@ -33,14 +33,6 @@ defmodule BGP.Message.UPDATE do
          fsm
        ) do
     {%{msg | path_attributes: decode_attributes(attributes, [], fsm)}, rest}
-  end
-
-  defp decode_nlri(
-         %__MODULE__{} = msg,
-         nlri,
-         fsm
-       ) do
-    %{msg | nlri: decode_prefixes(nlri, [], fsm)}
   end
 
   defp decode_attributes(
@@ -88,67 +80,12 @@ defmodule BGP.Message.UPDATE do
     end
   end
 
-  defp decode_prefixes(<<>>, prefixes, _fsm), do: Enum.reverse(prefixes)
-
-  defp decode_prefixes(
-         <<
-           length::8,
-           prefix::binary-unit(1)-size(length),
-           rest::binary
-         >>,
-         prefixes,
-         fsm
-       )
-       when rem(length, 8) == 0,
-       do: decode_prefixes(rest, [decode_prefix(length, prefix) | prefixes], fsm)
-
-  defp decode_prefixes(
-         <<
-           length::8,
-           prefix::binary-unit(1)-size(length + 8 - rem(length, 8)),
-           rest::binary
-         >>,
-         prefixes,
-         fsm
-       ),
-       do: decode_prefixes(rest, [decode_prefix(length, prefix) | prefixes], fsm)
-
-  defp decode_prefix(length, prefix) do
-    case IP.Address.from_binary(
-           <<prefix::binary-unit(1)-size(length), 0::unit(1)-size(32 - length)>>
-         ) do
-      {:ok, address} ->
-        IP.Prefix.new(address, length)
-
-      {:error, _reason} ->
-        raise NOTIFICATION, code: :update_message, data: prefix
-    end
-  end
-
   @impl Encoder
   def encode(%__MODULE__{} = msg, fsm) do
-    msg
-    |> encode_wr(fsm)
-    |> encode_pa(msg, fsm)
-    |> encode_nlri(msg, fsm)
-    |> Enum.reverse()
-  end
-
-  defp encode_wr(%__MODULE__{withdrawn_routes: withdrawn_routes}, fsm) do
-    {wr_data, length} = encode_prefixes(withdrawn_routes, fsm)
-    [[<<length::16>>, wr_data]]
-  end
-
-  defp encode_pa(data, %__MODULE__{path_attributes: path_attributes}, fsm) do
-    {pa_data, length} = encode_attributes(path_attributes, fsm)
-    [[<<length::16>>, pa_data] | data]
-  end
-
-  defp encode_nlri(data, %__MODULE__{nlri: []}, _fsm), do: data
-
-  defp encode_nlri(data, %__MODULE__{nlri: nlri}, fsm) do
-    {nlri_data, _length} = encode_prefixes(nlri, fsm)
-    [nlri_data | data]
+    {wr_data, wr_length} = Message.encode_prefixes(msg.withdrawn_routes)
+    {pa_data, pa_length} = encode_attributes(msg.path_attributes, fsm)
+    {nlri_data, _nlri_length} = Message.encode_prefixes(msg.nlri)
+    [<<wr_length::16>>, wr_data, <<pa_length::16>>, pa_data, nlri_data]
   end
 
   defp encode_attributes(attributes, fsm) do
@@ -156,25 +93,5 @@ defmodule BGP.Message.UPDATE do
       data = Attribute.encode(attribute, fsm)
       {data, length + IO.iodata_length(data)}
     end)
-  end
-
-  defp encode_prefixes(prefixes, _fsm) do
-    Enum.map_reduce(prefixes, 0, fn prefix, length ->
-      {data, data_length} = encode_prefix(prefix)
-      {data, length + div(data_length, 8)}
-    end)
-  end
-
-  defp encode_prefix(prefix) do
-    address = IP.Prefix.first(prefix)
-    integer = IP.Address.to_integer(address)
-    encoded = <<integer::unit(32)-size(1)>>
-    length = IP.Prefix.length(prefix)
-    padding = if rem(length, 8) > 0, do: 8 - rem(length, 8), else: 0
-
-    {
-      [<<length::8>>, <<encoded::binary-unit(1)-size(length), 0::unsigned-size(padding)>>],
-      8 + length + padding
-    }
   end
 end

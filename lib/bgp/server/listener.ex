@@ -54,7 +54,9 @@ defmodule BGP.Server.Listener do
   end
 
   @impl GenServer
-  def handle_info({:timer, _timer, :expired} = event, {socket, state}) do
+  def handle_info({:timer, timer, :expired} = event, {socket, state}) do
+    Logger.debug("LISTENER: #{timer} timer expired")
+
     case trigger_event(state, socket, event) do
       {:ok, state} -> {:noreply, {socket, state}}
       {action, state} -> {:stop, {:error, action}, {socket, state}}
@@ -72,15 +74,10 @@ defmodule BGP.Server.Listener do
   def handle_call(
         {:outbound_connection, peer_bgp_id},
         _from,
-        {socket, %{options: options, fsm: %FSM{state: fsm_state}} = state}
+        {socket, %{fsm: %FSM{state: fsm_state} = fsm} = state}
       )
       when fsm_state in [:open_confirm, :open_sent] do
-    server_bgp_id =
-      options[:server]
-      |> Server.get_config()
-      |> Keyword.fetch!(:bgp_id)
-
-    if server_bgp_id > peer_bgp_id do
+    if fsm.bgp_id > peer_bgp_id do
       {:reply, {:error, :collision}, {socket, state}}
     else
       Logger.warn("LISTENER: closing connection to peer due to collision")
@@ -118,8 +115,6 @@ defmodule BGP.Server.Listener do
   end
 
   defp trigger_event(%{fsm: fsm} = state, socket, event) do
-    Logger.debug("LISTENER: Triggering FSM event: #{inspect(event)}")
-
     with {:ok, fsm, effects} <- FSM.event(fsm, event),
          do: process_effects(%{state | fsm: fsm}, socket, effects)
   end
