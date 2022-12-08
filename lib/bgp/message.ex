@@ -123,8 +123,10 @@ defmodule BGP.Message do
   end
 
   defp decode_prefix(length, prefix) do
+    prefix_length = 32 - length
+
     case IP.Address.from_binary(
-           <<prefix::binary-unit(1)-size(length), 0::unit(1)-size(32 - length)>>
+           <<prefix::binary-unit(1)-size(length), 0::unit(1)-size(prefix_length)>>
          ) do
       {:ok, address} ->
         IP.Prefix.new(address, length)
