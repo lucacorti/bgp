@@ -120,8 +120,12 @@ defmodule BGP.Message.NOTIFICATION do
   end
 
   @impl Encoder
-  def encode(%__MODULE__{code: code, subcode: subcode, data: data}, _fsm),
-    do: [<<encode_code(code)::8>>, <<encode_subcode(code, subcode)::8>>, <<data::binary>>]
+  def encode(%__MODULE__{code: code, subcode: subcode, data: data}, _fsm) do
+    {
+      [<<encode_code(code)::8>>, <<encode_subcode(code, subcode)::8>>, data],
+      2 + IO.iodata_length(data)
+    }
+  end
 
   for {code, reason, _subcodes} <- errors do
     defp decode_code(unquote(code)), do: unquote(reason)

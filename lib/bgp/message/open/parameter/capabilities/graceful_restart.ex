@@ -41,5 +41,5 @@ defmodule BGP.Message.OPEN.Parameter.Capabilities.GracefulRestart do
   end
 
   @impl Encoder
-  def encode(_multi_protocol, _fsm), do: []
+  def encode(_multi_protocol, _fsm), do: {<<>>, 0}
 end

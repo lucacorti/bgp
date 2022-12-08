@@ -40,7 +40,16 @@ defmodule BGP.Message.UPDATE.Attribute.ASPath do
   @impl Encoder
   def encode(%__MODULE__{type: type, length: length, value: value}, fsm) do
     asn_length = asn_length(fsm)
-    [<<encode_type(type)::8, length::8>>, Enum.map(value, &<<&1::integer-size(asn_length)>>)]
+
+    {path, path_length} =
+      Enum.map_reduce(value, 0, fn asn, path_length ->
+        {<<asn::integer-size(asn_length)>>, path_length + div(asn_length, 8)}
+      end)
+
+    {
+      [<<encode_type(type)::8>>, <<length::8>>, path],
+      2 + path_length
+    }
   end
 
   defp asn_length(%FSM{four_octets: true}), do: 32

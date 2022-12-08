@@ -15,9 +15,12 @@ defmodule BGP.Message.OPEN.Parameter do
 
   @impl Encoder
   def encode(%module{} = message, fsm) do
-    data = module.encode(message, fsm)
+    {data, length} = module.encode(message, fsm)
 
-    [<<type_for_module(module)::8>>, <<IO.iodata_length(data)::8>>, data]
+    {
+      [<<type_for_module(module)::8>>, <<length::8>>, data],
+      2 + length
+    }
   end
 
   attributes = [

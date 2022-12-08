@@ -34,10 +34,13 @@ defmodule BGP.Message.OPEN.Parameter.Capabilities do
 
   @impl Encoder
   def encode(%__MODULE__{capabilities: capabilities}, fsm) do
-    Enum.map(capabilities, fn %module{} = capability ->
-      data = module.encode(capability, fsm)
+    Enum.map_reduce(capabilities, 0, fn %module{} = capability, length ->
+      {data, capability_length} = module.encode(capability, fsm)
 
-      [<<type_for_module(module)::8>>, <<IO.iodata_length(data)::8>>, data]
+      {
+        [<<type_for_module(module)::8>>, <<capability_length::8>>, data],
+        length + 2 + capability_length
+      }
     end)
   end
 

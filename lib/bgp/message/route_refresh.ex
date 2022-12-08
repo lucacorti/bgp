@@ -42,8 +42,12 @@ defmodule BGP.Message.ROUTEREFRESH do
   end
 
   @impl Encoder
-  def encode(%__MODULE__{afi: afi, safi: safi, subtype: subtype}, _fsm),
-    do: [<<encode_afi(afi)::16, encode_subtype(subtype)::8, encode_safi(safi)::8>>]
+  def encode(%__MODULE__{afi: afi, safi: safi, subtype: subtype}, _fsm) do
+    {
+      [<<encode_afi(afi)::16, encode_subtype(subtype)::8, encode_safi(safi)::8>>],
+      4
+    }
+  end
 
   defp encode_afi(afi) do
     case AFN.encode_afi(afi) do

@@ -31,8 +31,14 @@ defmodule BGP.Message.UPDATE.Attribute.AS4Path do
   end
 
   @impl Encoder
-  def encode(%__MODULE__{type: type, length: length, value: value}, _fsm),
-    do: [<<encode_type(type)::8>>, <<length::8>>, Enum.map(value, &<<&1::32>>)]
+  def encode(%__MODULE__{type: type, length: length, value: value}, _fsm) do
+    {path, path_length} =
+      Enum.map_reduce(value, 0, fn asn, length ->
+        {<<asn::32>>, length + 4}
+      end)
+
+    {[<<encode_type(type)::8>>, <<length::8>>, path], 2 + path_length}
+  end
 
   defp encode_type(:as_set), do: 1
   defp encode_type(:as_sequence), do: 2

@@ -34,8 +34,12 @@ defmodule BGP.Message.OPEN.Parameter.Capabilities.MultiProtocol do
   end
 
   @impl Encoder
-  def encode(%__MODULE__{afi: afi, safi: safi}, _fsm),
-    do: [<<encode_afi(afi)::16>>, <<0::8>>, <<encode_safi(safi)::8>>]
+  def encode(%__MODULE__{afi: afi, safi: safi}, _fsm) do
+    {
+      [<<encode_afi(afi)::16>>, <<0::8>>, <<encode_safi(safi)::8>>],
+      4
+    }
+  end
 
   def encode(_data, _fsm) do
     raise NOTIFICATION, code: :open_message

@@ -58,17 +58,20 @@ defmodule Bgp.Message.Update.Attribute.MpReachNLRI do
   @impl Encoder
   def encode(%__MODULE__{} = message, _fsm) do
     next_hop = IP.Address.to_integer(message.next_hop)
-    length = if IP.Address.v4?(message.next_hop), do: 32, else: 128
-    {nlri, _nlri_length} = Message.encode_prefixes(message.nlri)
+    next_hop_length = if IP.Address.v4?(message.next_hop), do: 32, else: 128
+    {nlri, nlri_length} = Message.encode_prefixes(message.nlri)
 
-    [
-      <<encode_afi(message.afi)::16>>,
-      <<encode_safi(message.safi)::8>>,
-      <<length::8>>,
-      <<next_hop::size(length)>>,
-      <<0::8>>,
-      nlri
-    ]
+    {
+      [
+        <<encode_afi(message.afi)::16>>,
+        <<encode_safi(message.safi)::8>>,
+        <<next_hop_length::8>>,
+        <<next_hop::size(next_hop_length)>>,
+        <<0::8>>,
+        nlri
+      ],
+      4 + div(next_hop_length, 8) + 1 + nlri_length
+    }
   end
 
   defp encode_afi(afi) do

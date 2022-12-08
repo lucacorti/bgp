@@ -21,11 +21,13 @@ defmodule BGP.Message.UPDATE.Attribute.Origin do
   end
 
   @impl Encoder
-  def encode(%__MODULE__{origin: :igp}, _fsm), do: <<0::8>>
-  def encode(%__MODULE__{origin: :egp}, _fsm), do: <<1::8>>
-  def encode(%__MODULE__{origin: :incomplete}, _fsm), do: <<2::8>>
+  def encode(%__MODULE__{origin: origin}, _fsm), do: {encode_origin(origin), 1}
 
-  def encode(_origin, _fsm) do
+  defp encode_origin(:igp), do: <<0::8>>
+  defp encode_origin(:egp), do: <<1::8>>
+  defp encode_origin(:incomplete), do: <<2::8>>
+
+  defp encode_origin(_origin) do
     raise NOTIFICATION, code: :update_message, subcode: :malformed_attribute_list
   end
 end

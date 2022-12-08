@@ -16,5 +16,5 @@ defmodule BGP.Message.KEEPALIVE do
   end
 
   @impl Encoder
-  def encode(_keepalive, _fsm), do: <<>>
+  def encode(_keepalive, _fsm), do: {<<>>, 0}
 end

@@ -84,14 +84,18 @@ defmodule BGP.Message.UPDATE do
   def encode(%__MODULE__{} = msg, fsm) do
     {wr_data, wr_length} = Message.encode_prefixes(msg.withdrawn_routes)
     {pa_data, pa_length} = encode_attributes(msg.path_attributes, fsm)
-    {nlri_data, _nlri_length} = Message.encode_prefixes(msg.nlri)
-    [<<wr_length::16>>, wr_data, <<pa_length::16>>, pa_data, nlri_data]
+    {nlri_data, nlri_length} = Message.encode_prefixes(msg.nlri)
+
+    {
+      [<<wr_length::16>>, wr_data, <<pa_length::16>>, pa_data, nlri_data],
+      2 + wr_length + 2 + pa_length + nlri_length
+    }
   end
 
   defp encode_attributes(attributes, fsm) do
     Enum.map_reduce(attributes, 0, fn attribute, length ->
-      data = Attribute.encode(attribute, fsm)
-      {data, length + IO.iodata_length(data)}
+      {data, attribute_length} = Attribute.encode(attribute, fsm)
+      {data, length + attribute_length}
     end)
   end
 end

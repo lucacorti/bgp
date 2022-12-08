@@ -2,7 +2,7 @@ defmodule BGP.Message do
   @moduledoc false
 
   alias BGP.FSM
-  alias BGP.Message.{Encoder, KEEPALIVE, NOTIFICATION, OPEN, ROUTEREFRESH, UPDATE}
+  alias BGP.Message.{KEEPALIVE, NOTIFICATION, OPEN, ROUTEREFRESH, UPDATE}
 
   @type t :: KEEPALIVE.t() | NOTIFICATION.t() | OPEN.t() | UPDATE.t() | ROUTEREFRESH.t()
 
@@ -12,9 +12,7 @@ defmodule BGP.Message do
   @max_size 4_096
   @extended_max_size 65_536
 
-  @behaviour BGP.Message.Encoder
-
-  @impl Encoder
+  @spec decode(binary(), FSM.t()) :: t()
   def decode(<<header::binary-size(@header_size), msg::binary>>, fsm) do
     {module, length} = decode_header(header)
     check_length(module, length, fsm)
@@ -42,13 +40,13 @@ defmodule BGP.Message do
 
   defp check_length(_module, _length, _fsm), do: :ok
 
-  @impl Encoder
+  @spec encode(t(), FSM.t()) :: iodata()
   def encode(%module{} = message, fsm) do
-    data = module.encode(message, fsm)
+    {data, length} = module.encode(message, fsm)
 
     [
       <<@marker::@marker_size>>,
-      <<@header_size + IO.iodata_length(data)::16>>,
+      <<@header_size + length::16>>,
       <<type_for_module(module)::8>>,
       data
     ]
@@ -138,7 +136,7 @@ defmodule BGP.Message do
   def encode_prefixes(prefixes) do
     Enum.map_reduce(prefixes, 0, fn prefix, length ->
       {data, data_length} = encode_prefix(prefix)
-      {data, length + div(data_length, 8)}
+      {data, length + data_length}
     end)
   end
 
@@ -151,7 +149,7 @@ defmodule BGP.Message do
 
     {
       [<<length::8>>, <<encoded::binary-unit(1)-size(length), 0::unsigned-size(padding)>>],
-      8 + length + padding
+      1 + div(length + padding, 8)
     }
   end
 end

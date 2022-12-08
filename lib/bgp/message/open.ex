@@ -94,13 +94,17 @@ defmodule BGP.Message.OPEN do
   def encode(%__MODULE__{parameters: parameters} = msg, options) do
     {data, length} = encode_parameters(parameters, options)
     bgp_id = IP.Address.to_integer(msg.bgp_id)
-    [<<4::8>>, <<msg.asn::16>>, <<msg.hold_time::16>>, <<bgp_id::32>>, <<length::8>>, data]
+
+    {
+      [<<4::8>>, <<msg.asn::16>>, <<msg.hold_time::16>>, <<bgp_id::32>>, <<length::8>>, data],
+      10 + length
+    }
   end
 
   defp encode_parameters(parameters, fsm) do
     Enum.map_reduce(parameters, 0, fn parameter, total ->
-      data = Parameter.encode(parameter, fsm)
-      {data, total + IO.iodata_length(data)}
+      {data, length} = Parameter.encode(parameter, fsm)
+      {data, total + length}
     end)
   end
 end

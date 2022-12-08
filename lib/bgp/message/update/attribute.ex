@@ -29,9 +29,12 @@ defmodule BGP.Message.UPDATE.Attribute do
 
   @impl Encoder
   def encode(%module{} = message, fsm) do
-    data = module.encode(message, fsm)
+    {data, length} = module.encode(message, fsm)
 
-    [<<IO.iodata_length(data)::16>>, <<type_for_module(module)::8>>, data]
+    {
+      [<<length::16>>, <<type_for_module(module)::8>>, data],
+      3 + length
+    }
   end
 
   attributes = [

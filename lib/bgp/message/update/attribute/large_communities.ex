@@ -22,8 +22,9 @@ defmodule BGP.Message.UPDATE.Attribute.LargeCommunities do
        do: decode_large_communities(rest, [{asn, data1, data2} | large_communities])
 
   @impl Encoder
-  def encode(%__MODULE__{large_communities: large_communities}, _fsm),
-    do: Enum.map(large_communities, &encode_large_community(&1))
-
-  defp encode_large_community({asn, data1, data2}), do: <<asn::32, data1::32, data2::32>>
+  def encode(%__MODULE__{large_communities: large_communities}, _fsm) do
+    Enum.map_reduce(large_communities, 0, fn {asn, data1, data2}, length ->
+      {[<<asn::32>>, <<data1::32>>, <<data2::32>>], length + 12}
+    end)
+  end
 end

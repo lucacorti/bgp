@@ -12,5 +12,5 @@ defmodule BGP.Message.UPDATE.Attribute.AtomicAggregate do
   def decode(_data, _fsm), do: %__MODULE__{}
 
   @impl Encoder
-  def encode(%__MODULE__{}, _fsm), do: <<>>
+  def encode(%__MODULE__{}, _fsm), do: {<<>>, 0}
 end

@@ -45,13 +45,16 @@ defmodule Bgp.Message.Update.Attribute.MpUnreachNLRI do
 
   @impl Encoder
   def encode(%__MODULE__{} = message, _fsm) do
-    {withdrawn_routes, _length} = Message.encode_prefixes(message.withdrawn_routes)
+    {withdrawn_routes, length} = Message.encode_prefixes(message.withdrawn_routes)
 
-    [
-      <<encode_afi(message.afi)::16>>,
-      <<encode_safi(message.safi)::8>>,
-      withdrawn_routes
-    ]
+    {
+      [
+        <<encode_afi(message.afi)::16>>,
+        <<encode_safi(message.safi)::8>>,
+        withdrawn_routes
+      ],
+      3 + length
+    }
   end
 
   defp encode_afi(afi) do

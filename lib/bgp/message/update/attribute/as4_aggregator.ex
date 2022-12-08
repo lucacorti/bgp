@@ -28,7 +28,11 @@ defmodule BGP.Message.UPDATE.Attribute.AS4Aggregator do
   @impl Encoder
   def encode(%__MODULE__{asn: asn, address: address}, _fsm) do
     prefix = IP.Address.to_integer(address)
-    [<<asn::32>>, <<prefix::32>>]
+
+    {
+      [<<asn::32>>, <<prefix::32>>],
+      8
+    }
   end
 
   def encode(_origin, _fsm) do
