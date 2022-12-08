@@ -68,7 +68,9 @@ defmodule BGP.Message.UPDATE do
          attributes,
          fsm
        ) do
-    <<length::integer-size(8 + 8 * extended), attribute::binary-size(length), rest::binary>> =
+    attribute_length = 8 + 8 * extended
+
+    <<length::integer-size(attribute_length), attribute::binary-size(length), rest::binary>> =
       data
 
     case Attribute.decode(<<code::8, attribute::binary>>, fsm) do
