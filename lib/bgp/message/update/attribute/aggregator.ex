@@ -5,7 +5,7 @@ defmodule BGP.Message.UPDATE.Attribute.Aggregator do
   alias BGP.Message.{Encoder, NOTIFICATION}
 
   @asn_max :math.pow(2, 16) - 1
-  @asn_four_octets_max :math.pow(2, 16) - 1
+  @asn_four_octets_max :math.pow(2, 32) - 1
 
   @type t :: %__MODULE__{asn: BGP.asn(), address: IP.Address.t()}
 

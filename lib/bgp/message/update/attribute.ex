@@ -9,6 +9,7 @@ defmodule BGP.Message.UPDATE.Attribute do
     AS4Path,
     ASPath,
     AtomicAggregate,
+    ClusterList,
     Communities,
     LargeCommunities,
     LocalPref,
@@ -16,7 +17,8 @@ defmodule BGP.Message.UPDATE.Attribute do
     MpUnreachNLRI,
     MultiExitDisc,
     NextHop,
-    Origin
+    Origin,
+    OriginatorId
   }
 
   @behaviour Encoder
@@ -41,6 +43,8 @@ defmodule BGP.Message.UPDATE.Attribute do
     {AtomicAggregate, 6},
     {Aggregator, 7},
     {Communities, 8},
+    {OriginatorId, 9},
+    {ClusterList, 10},
     {MpReachNLRI, 14},
     {MpUnreachNLRI, 15},
     {ExtendedCommunities, 16},
