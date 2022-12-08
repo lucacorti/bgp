@@ -113,12 +113,14 @@ defmodule BGP.Message do
   defp decode_prefixes(
          <<
            length::8,
-           prefix::binary-unit(1)-size(length + 8 - rem(length, 8)),
-           rest::binary
+           data::binary
          >>,
          prefixes
-       ),
-       do: decode_prefixes(rest, [decode_prefix(length, prefix) | prefixes])
+       ) do
+    prefix_length = length + 8 - rem(length, 8)
+    <<prefix::binary-unit(1)-size(prefix_length), rest::binary>> = data
+    decode_prefixes(rest, [decode_prefix(length, prefix) | prefixes])
+  end
 
   defp decode_prefix(length, prefix) do
     case IP.Address.from_binary(
