@@ -724,16 +724,8 @@ defmodule BGP.FSM do
          %__MODULE__{hold_time: hold_time, state: :established} = fsm,
          {:timer, :keep_alive, :expired}
        ) do
-    if hold_time > 0 do
-      {
-        :ok,
-        fsm
-        |> restart_timer(:keep_alive),
-        [{:send, %KEEPALIVE{}}]
-      }
-    else
-      {:ok, fsm, [{:send}], %KEEPALIVE{}}
-    end
+    fsm = if hold_time > 0, do: restart_timer(fsm, :keep_alive), else: fsm
+    {:ok, fsm, [{:send, %KEEPALIVE{}}]}
   end
 
   defp process_event(%__MODULE__{state: :established} = fsm, {:tcp_connection, :fails}) do
@@ -805,7 +797,7 @@ defmodule BGP.FSM do
         }
 
       {:ok, %UPDATE{} = msg} ->
-        {:ok, fsm, [{:recv}], msg}
+        {:ok, fsm, [{:recv, msg}]}
     end
   end
 
@@ -815,7 +807,7 @@ defmodule BGP.FSM do
       %__MODULE__{fsm | state: :idle}
       |> set_timer(:connect_retry, 0)
       |> increment_counter(:connect_retry),
-      [{:disconnect, %NOTIFICATION{code: :fsm}, :send}, {:tcp_connection}]
+      [{:send, %NOTIFICATION{code: :fsm}}, {:tcp_connection, :disconnect}]
     }
   end
 
