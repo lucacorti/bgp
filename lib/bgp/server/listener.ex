@@ -6,7 +6,7 @@ defmodule BGP.Server.Listener do
   use Handler
 
   alias BGP.{FSM, Message, Server}
-  alias BGP.Message.{NOTIFICATION, OPEN}
+  alias BGP.Message.{NOTIFICATION, OPEN, UPDATE}
   alias BGP.Server.Session
 
   require Logger
@@ -159,7 +159,8 @@ defmodule BGP.Server.Listener do
     end
   end
 
-  defp process_effect(_state, _socket, {:recv, _msg}), do: :ok
+  defp process_effect(%{server: server}, _socket, {:recv, %UPDATE{} = message}),
+    do: Server.RDE.process_update(server, message)
 
   defp process_effect(%{fsm: fsm} = state, socket, {:send, msg}) do
     case Socket.send(socket, Message.encode(msg, fsm)) do

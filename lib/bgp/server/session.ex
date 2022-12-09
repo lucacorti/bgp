@@ -198,9 +198,8 @@ defmodule BGP.Server.Session do
     end
   end
 
-  defp process_effect(%{options: options}, {:recv, %UPDATE{} = message}) do
-    Server.RDE.process_update(options[:server], message)
-  end
+  defp process_effect(%{options: options}, {:recv, %UPDATE{} = message}),
+    do: Server.RDE.process_update(options[:server], message)
 
   defp process_effect(%{fsm: fsm, socket: socket}, {:send, msg}) do
     case :gen_tcp.send(socket, Message.encode(msg, fsm)) do
