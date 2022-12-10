@@ -4,6 +4,7 @@ defmodule BGP.Message.OPEN.Parameter.Capabilities do
   alias BGP.Message.{Encoder, NOTIFICATION}
 
   alias BGP.Message.OPEN.Parameter.Capabilities.{
+    ExtendedMessage,
     FourOctetsASN,
     GracefulRestart,
     MultiProtocol,
@@ -55,10 +56,6 @@ defmodule BGP.Message.OPEN.Parameter.Capabilities do
 
   for {module, code} <- attributes do
     defp type_for_module(unquote(module)), do: unquote(code)
-  end
-
-  defp type_for_module(_module) do
-    raise NOTIFICATION, code: :open_message
   end
 
   for {module, code} <- attributes do

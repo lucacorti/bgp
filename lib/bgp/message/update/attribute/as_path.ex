@@ -4,61 +4,71 @@ defmodule BGP.Message.UPDATE.Attribute.ASPath do
   alias BGP.FSM
   alias BGP.Message.{Encoder, NOTIFICATION}
 
-  @type type :: :as_set | :as_sequence
+  @type type :: :as_set | :as_sequence | :as_confed_sequence | :as_confed_set
   @type length :: non_neg_integer()
-  @type t :: %__MODULE__{type: type(), length: length()}
+  @type t :: %__MODULE__{value: [{type(), length(), BGP.asn()}]}
 
-  @enforce_keys [:type, :length]
-  defstruct length: nil, type: nil, value: []
+  defstruct value: []
+
+  @as_trans 23_456
+  @asn_2octets_max 65_535
 
   @behaviour Encoder
 
   @impl Encoder
-  def decode(<<type::8, length::8, asns::binary>>, fsm) do
-    %__MODULE__{
-      type: decode_type(type),
-      length: length,
-      value: decode_asns(asns, fsm, [])
-    }
+  def decode(data, fsm) do
+    %__MODULE__{value: decode_path(data, fsm, [])}
+  end
+
+  defp decode_path(<<>>, _fsm, path), do: Enum.reverse(path)
+
+  defp decode_path(<<type::8, length::8, data::binary>>, fsm, path) do
+    asns_length = length * div(asn_length(fsm), 8)
+    <<asns::binary-size(asns_length), rest::binary>> = data
+    decode_path(rest, fsm, [{decode_type(type), length, decode_asns(asns, [])} | path])
+  end
+
+  defp decode_path(data, _fsm, _path) do
+    raise NOTIFICATION, code: :update_message, subcode: :malformed_as_path, data: data
   end
 
   defp decode_type(1), do: :as_set
   defp decode_type(2), do: :as_sequence
+  defp decode_type(3), do: :as_confed_sequence
+  defp decode_type(4), do: :as_confed_set
 
-  defp decode_asns(<<>>, _fsm, asns), do: Enum.reverse(asns)
+  defp decode_asns(<<>>, asns), do: Enum.reverse(asns)
 
-  defp decode_asns(<<asn::32, rest::binary>>, %FSM{four_octets: true} = fsm, asns),
-    do: decode_asns(rest, fsm, [asn | asns])
-
-  defp decode_asns(<<asn::16, rest::binary>>, %FSM{four_octets: false} = fsm, asns),
-    do: decode_asns(rest, fsm, [asn | asns])
-
-  defp decode_asns(_data, _four_octets, _asns) do
-    raise NOTIFICATION, code: :update_message
-  end
+  defp decode_asns(<<asn::16, rest::binary>>, asns),
+    do: decode_asns(rest, [asn | asns])
 
   @impl Encoder
-  def encode(%__MODULE__{type: type, length: length, value: value}, fsm) do
+  def encode(%__MODULE__{value: value}, %FSM{four_octets: four_octets} = fsm) do
     asn_length = asn_length(fsm)
 
-    {path, path_length} =
-      Enum.map_reduce(value, 0, fn asn, path_length ->
-        {<<asn::integer-size(asn_length)>>, path_length + div(asn_length, 8)}
-      end)
+    Enum.map_reduce(value, 0, fn {type, length, asns}, path_length ->
+      {
+        [
+          <<encode_type(type)::8>>,
+          <<length::8>>,
+          Enum.map(asns, fn
+            asn when not four_octets and asn > @asn_2octets_max ->
+              <<@as_trans::size(asn_length)>>
 
-    {
-      [<<encode_type(type)::8>>, <<length::8>>, path],
-      2 + path_length
-    }
+            asn ->
+              <<asn::size(asn_length)>>
+          end)
+        ],
+        path_length + 2 + length * div(asn_length, 8)
+      }
+    end)
   end
-
-  defp asn_length(%FSM{four_octets: true}), do: 32
-  defp asn_length(%FSM{four_octets: false}), do: 16
 
   defp encode_type(:as_set), do: 1
   defp encode_type(:as_sequence), do: 2
+  defp encode_type(:as_confed_sequence), do: 3
+  defp encode_type(:as_confed_set), do: 4
 
-  defp encode_type(_type) do
-    raise NOTIFICATION, code: :update_message
-  end
+  defp asn_length(%FSM{four_octets: false}), do: 16
+  defp asn_length(%FSM{four_octets: true}), do: 32
 end

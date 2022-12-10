@@ -1,4 +1,4 @@
-defmodule BGP.Message.UPDATE.Attribute.IPV6ExtendedCommunities do
+defmodule BGP.Message.UPDATE.Attribute.IPv6ExtendedCommunities do
   @moduledoc false
 
   alias BGP.Message.Encoder

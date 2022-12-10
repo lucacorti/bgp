@@ -5,45 +5,50 @@ defmodule BGP.Message.UPDATE.Attribute.AS4Path do
 
   @type type :: :as_set | :as_sequence
   @type length :: non_neg_integer()
-  @type t :: %__MODULE__{type: type(), length: length()}
+  @type t :: %__MODULE__{value: [{type(), length(), BGP.asn()}]}
 
-  @enforce_keys [:type, :length]
-  defstruct length: nil, type: nil, value: []
+  defstruct value: []
 
   @behaviour Encoder
 
   @impl Encoder
-  def decode(<<type::8, length::8, asns::binary>>, _fsm),
-    do: %__MODULE__{type: decode_type(type), length: length, value: decode_asns([], asns)}
+  def decode(data, _fsm) do
+    %__MODULE__{value: decode_path(data, [])}
+  end
+
+  defp decode_path(<<>>, path), do: Enum.reverse(path)
+
+  defp decode_path(<<type::8, length::8, data::binary>>, path) do
+    <<asns::binary-size(length * 4), rest::binary>> = data
+    decode_path(rest, [{decode_type(type), length, decode_asns(asns, [])} | path])
+  end
+
+  defp decode_path(data, _path) do
+    raise NOTIFICATION, code: :update_message, subcode: :malformed_as_path, data: data
+  end
 
   defp decode_type(1), do: :as_set
   defp decode_type(2), do: :as_sequence
 
-  defp decode_type(_data) do
-    raise NOTIFICATION, code: :update_message
-  end
+  defp decode_asns(<<>>, asns), do: Enum.reverse(asns)
 
-  defp decode_asns(asns, <<>>), do: Enum.reverse(asns)
-  defp decode_asns(asns, <<asn::32, rest::binary>>), do: decode_asns([asn | asns], rest)
-
-  defp decode_asns(_asns, _data) do
-    raise NOTIFICATION, code: :update_message
-  end
+  defp decode_asns(<<asn::16, rest::binary>>, asns),
+    do: decode_asns(rest, [asn | asns])
 
   @impl Encoder
-  def encode(%__MODULE__{type: type, length: length, value: value}, _fsm) do
-    {path, path_length} =
-      Enum.map_reduce(value, 0, fn asn, length ->
-        {<<asn::32>>, length + 4}
-      end)
-
-    {[<<encode_type(type)::8>>, <<length::8>>, path], 2 + path_length}
+  def encode(%__MODULE__{value: value}, _fsm) do
+    Enum.map_reduce(value, 0, fn {type, length, asns}, path_length ->
+      {
+        [
+          <<encode_type(type)::8>>,
+          <<length::8>>,
+          Enum.map(asns, &<<&1::size(32)>>)
+        ],
+        path_length + 2 + length * 4
+      }
+    end)
   end
 
   defp encode_type(:as_set), do: 1
   defp encode_type(:as_sequence), do: 2
-
-  defp encode_type(_data) do
-    raise NOTIFICATION, code: :update_message
-  end
 end

@@ -18,7 +18,8 @@ defmodule BGP.Message.AFN do
   @type safi ::
           unquote(Enum.map_join(safis, " | ", &inspect(elem(&1, 1))) |> Code.string_to_quoted!())
 
-  @type code :: non_neg_integer()
+  @type code :: 0..65_535
+  @type subcode :: 0..255
 
   @spec decode_afi(code()) :: {:ok, afi()} | :error
   for {code, afi} <- afis do
@@ -28,7 +29,7 @@ defmodule BGP.Message.AFN do
   def decode_afi(65_535), do: {:ok, :reserved}
   def decode_afi(_code), do: :error
 
-  @spec decode_safi(code()) :: {:ok, safi()} | :error
+  @spec decode_safi(subcode()) :: {:ok, safi()} | :error
   for {code, afi} <- safis do
     def decode_safi(unquote(code)), do: {:ok, unquote(afi)}
   end
@@ -44,7 +45,7 @@ defmodule BGP.Message.AFN do
   def encode_afi(65_535), do: {:ok, :reserved}
   def encode_afi(_afi), do: :error
 
-  @spec encode_safi(safi()) :: {:ok, code()} | :error
+  @spec encode_safi(safi()) :: {:ok, subcode()} | :error
   for {code, safi} <- safis do
     def encode_safi(unquote(safi)), do: {:ok, unquote(code)}
   end

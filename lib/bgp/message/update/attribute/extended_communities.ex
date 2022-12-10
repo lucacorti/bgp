@@ -1,6 +1,8 @@
 defmodule BGP.Message.UPDATE.Attribute.ExtendedCommunities do
   @moduledoc false
 
+  alias BGP.Message.Encoder
+
   extended_communities = [
     {0x00, :transitive_2_octet_as_specific,
      [
@@ -148,8 +150,6 @@ defmodule BGP.Message.UPDATE.Attribute.ExtendedCommunities do
   @type extended_community :: {type(), subtype(), binary()}
   @type t :: %__MODULE__{extended_communities: [extended_community()]}
   defstruct extended_communities: []
-
-  alias BGP.Message.Encoder
 
   @behaviour Encoder
 

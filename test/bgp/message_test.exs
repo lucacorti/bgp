@@ -3,6 +3,8 @@ defmodule BGP.MessageTest do
 
   alias BGP.FSM
   alias BGP.Message.{KEEPALIVE, NOTIFICATION, OPEN, UPDATE}
+  alias BGP.Message.UPDATE.Attribute
+  alias BGP.Message.UPDATE.Attribute.{ASPath, NextHop, Origin}
 
   import IP.Sigil
 
@@ -32,7 +34,7 @@ defmodule BGP.MessageTest do
 
   test "OPEN encode and decode", %{fsm: fsm} do
     asn = 100
-    bgp_id = ~i(127.0.0.1)
+    bgp_id = ~i(1.2.3.4)
     hold_time = 90
 
     assert %OPEN{asn: ^asn, bgp_id: ^bgp_id, hold_time: ^hold_time} =
@@ -43,12 +45,15 @@ defmodule BGP.MessageTest do
   end
 
   test "UPDATE encode and decode", %{fsm: fsm} do
-    prefixes = [
+    nlri = [
       ~i(0.0.0.0/0),
       ~i(1.0.0.0/8),
       ~i(2.16.0.0/12),
       ~i(3.4.0.0/16),
-      ~i(4.5.16.0/20),
+      ~i(4.5.16.0/20)
+    ]
+
+    withdrawn = [
       ~i(4.6.20.0/22),
       ~i(5.6.7.0/24),
       ~i(6.7.8.16/28),
@@ -56,8 +61,14 @@ defmodule BGP.MessageTest do
       ~i(8.9.10.20/32)
     ]
 
-    assert %UPDATE{withdrawn_routes: ^prefixes, nlri: ^prefixes} =
-             %UPDATE{withdrawn_routes: prefixes, nlri: prefixes}
+    attributes = [
+      %Attribute{transitive: 1, value: %Origin{origin: :igp}},
+      %Attribute{transitive: 1, value: %ASPath{value: [{:as_sequence, 1, [65_000]}]}},
+      %Attribute{transitive: 1, value: %NextHop{value: ~i(1.2.3.4)}}
+    ]
+
+    assert %UPDATE{withdrawn_routes: ^withdrawn, path_attributes: ^attributes, nlri: ^nlri} =
+             %UPDATE{withdrawn_routes: withdrawn, path_attributes: attributes, nlri: nlri}
              |> BGP.Message.encode(fsm)
              |> IO.iodata_to_binary()
              |> BGP.Message.decode(fsm)

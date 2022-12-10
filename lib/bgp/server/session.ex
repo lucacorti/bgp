@@ -140,9 +140,11 @@ defmodule BGP.Server.Session do
       end
     end)
   catch
-    {:error, %NOTIFICATION{} = error} ->
-      process_effect(state, {:send, error})
-      {:disconnect, error, state}
+    :error, %NOTIFICATION{} = error ->
+      case trigger_event(state, {:send, error}) do
+        {:ok, state} -> {:noreply, state}
+        {action, state} -> {:disconnect, action, state}
+      end
   after
     :inet.setopts(socket, active: :once)
   end

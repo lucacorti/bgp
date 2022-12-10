@@ -10,7 +10,7 @@ defmodule BGP.Message do
   @marker 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF
   @marker_size 128
   @max_size 4_096
-  @extended_max_size 65_536
+  @extended_max_size 65_535
 
   @spec decode(binary(), FSM.t()) :: t()
   def decode(<<header::binary-size(@header_size), msg::binary>>, fsm) do
@@ -80,10 +80,6 @@ defmodule BGP.Message do
 
   for {module, type} <- messages do
     defp type_for_module(unquote(module)), do: unquote(type)
-  end
-
-  defp type_for_module(_module) do
-    raise NOTIFICATION, code: :message_header, subcode: :bad_message_type
   end
 
   for {module, type} <- messages do

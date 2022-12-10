@@ -22,10 +22,32 @@ defmodule BGP.Message.OPEN do
 
   @impl Encoder
   def decode(
+        <<version::8, asn::16, hold_time::16, bgp_id::binary-size(4), _non_ext_params_length::8,
+          255::8, params_length::16, params::binary-size(params_length)>>,
+        fsm
+      ) do
+    decode_open(
+      version,
+      asn,
+      hold_time,
+      bgp_id,
+      params,
+      %FSM{fsm | extended_optional_parameters: true}
+    )
+  end
+
+  def decode(
         <<version::8, asn::16, hold_time::16, bgp_id::binary-size(4), params_length::8,
           params::binary-size(params_length)>>,
         fsm
-      ) do
+      ),
+      do: decode_open(version, asn, hold_time, bgp_id, params, fsm)
+
+  def decode(_keepalive, _fsm) do
+    raise NOTIFICATION, code: :message_header, subcode: :bad_message_length
+  end
+
+  defp decode_open(version, asn, hold_time, bgp_id, params, fsm) do
     with :ok <- check_asn(asn, fsm),
          :ok <- check_hold_time(hold_time),
          :ok <- check_version(version),
@@ -37,10 +59,6 @@ defmodule BGP.Message.OPEN do
         parameters: decode_parameters(params, [], fsm)
       }
     end
-  end
-
-  def decode(_keepalive, _fsm) do
-    raise NOTIFICATION, code: :message_header, subcode: :bad_message_length
   end
 
   defp check_asn(asn, %FSM{four_octets: true})
@@ -82,6 +100,15 @@ defmodule BGP.Message.OPEN do
   defp decode_parameters(<<>> = _data, params, _fsm), do: Enum.reverse(params)
 
   defp decode_parameters(
+         <<type::8, param_length::16, parameter::binary-size(param_length), rest::binary>>,
+         parameters,
+         %FSM{extended_optional_parameters: true} = fsm
+       ) do
+    parameter = Parameter.decode(<<type::8, param_length::16, parameter::binary>>, fsm)
+    decode_parameters(rest, [parameter | parameters], fsm)
+  end
+
+  defp decode_parameters(
          <<type::8, param_length::8, parameter::binary-size(param_length), rest::binary>>,
          parameters,
          fsm
@@ -91,8 +118,32 @@ defmodule BGP.Message.OPEN do
   end
 
   @impl Encoder
-  def encode(%__MODULE__{parameters: parameters} = msg, options) do
-    {data, length} = encode_parameters(parameters, options)
+  def encode(
+        %__MODULE__{parameters: parameters} = msg,
+        %FSM{extended_optional_parameters: true} = fsm
+      ) do
+    {data, length} = encode_parameters(parameters, fsm)
+
+    bgp_id = IP.Address.to_integer(msg.bgp_id)
+
+    {
+      [
+        <<4::8>>,
+        <<msg.asn::16>>,
+        <<msg.hold_time::16>>,
+        <<bgp_id::32>>,
+        <<255::8>>,
+        <<255::8>>,
+        <<length::16>>,
+        data
+      ],
+      13 + length
+    }
+  end
+
+  def encode(%__MODULE__{parameters: parameters} = msg, fsm) do
+    {data, length} = encode_parameters(parameters, fsm)
+
     bgp_id = IP.Address.to_integer(msg.bgp_id)
 
     {

@@ -1,7 +1,7 @@
 defmodule BGP.Message.UPDATE.Attribute.Communities do
   @moduledoc false
 
-  alias BGP.Message.{Encoder, NOTIFICATION}
+  alias BGP.Message.Encoder
 
   communities = [
     {0xFFFF0000, :graceful_shutdown},
@@ -54,9 +54,5 @@ defmodule BGP.Message.UPDATE.Attribute.Communities do
 
   for {code, community} <- communities do
     defp encode_community(unquote(community)), do: unquote(code)
-  end
-
-  defp encode_community(_community) do
-    raise NOTIFICATION, code: :update_message
   end
 end

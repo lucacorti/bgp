@@ -25,7 +25,6 @@ defmodule BGP.Message.UPDATE.Attribute.NextHop do
 
   @impl Encoder
   def encode(%__MODULE__{value: value}, _fsm) do
-    prefix = IP.Address.to_integer(value)
-    {[<<32::8>>, <<prefix::32>>], 5}
+    {<<IP.Address.to_integer(value)::unit(32)-size(1)>>, 4}
   end
 end

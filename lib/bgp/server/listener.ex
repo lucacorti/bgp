@@ -48,9 +48,13 @@ defmodule BGP.Server.Listener do
            do: {:continue, %{state | buffer: rest}}
     end)
   catch
-    {:error, %NOTIFICATION{} = error} ->
-      process_effect(state, socket, {:send, error})
-      {:close, state}
+    :error, %NOTIFICATION{} = error ->
+      Logger.error("error while processing received message: #{inspect(error)}")
+
+      case trigger_event(state, socket, {:send, error}) do
+        {:ok, state} -> {:noreply, {socket, state}}
+        {_action, state} -> {:close, state}
+      end
   end
 
   @impl GenServer

@@ -19,8 +19,4 @@ defmodule BGP.Message.UPDATE.Attribute.MultiExitDisc do
 
   @impl Encoder
   def encode(%__MODULE__{value: multi_exit_disc}, _fsm), do: {<<multi_exit_disc::32>>, 4}
-
-  def encode(_origin) do
-    raise NOTIFICATION, code: :update_message, subcode: :malformed_attribute_list
-  end
 end

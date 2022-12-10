@@ -17,7 +17,7 @@ defmodule BGP.Message.UPDATE.Attribute.Origin do
   def decode(<<2::8>>, _fsm), do: %__MODULE__{origin: :incomplete}
 
   def decode(_data, _fsm) do
-    raise NOTIFICATION, code: :update_message, subcode: :malformed_attribute_list
+    raise NOTIFICATION, code: :update_message, subcode: :invalid_origin_attribute
   end
 
   @impl Encoder
@@ -26,8 +26,4 @@ defmodule BGP.Message.UPDATE.Attribute.Origin do
   defp encode_origin(:igp), do: <<0::8>>
   defp encode_origin(:egp), do: <<1::8>>
   defp encode_origin(:incomplete), do: <<2::8>>
-
-  defp encode_origin(_origin) do
-    raise NOTIFICATION, code: :update_message, subcode: :malformed_attribute_list
-  end
 end

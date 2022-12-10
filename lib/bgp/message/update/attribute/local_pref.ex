@@ -19,8 +19,4 @@ defmodule BGP.Message.UPDATE.Attribute.LocalPref do
 
   @impl Encoder
   def encode(%__MODULE__{value: local_pref}, _fsm), do: {<<local_pref::32>>, 4}
-
-  def encode(_origin, _fsm) do
-    raise NOTIFICATION, code: :update_message, subcode: :malformed_attribute_list
-  end
 end

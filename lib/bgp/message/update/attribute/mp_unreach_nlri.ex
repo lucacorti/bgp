@@ -1,4 +1,4 @@
-defmodule Bgp.Message.Update.Attribute.MpUnreachNLRI do
+defmodule BGP.Message.UPDATE.Attribute.MpUnreachNLRI do
   @moduledoc false
 
   alias BGP.Message
@@ -58,16 +58,10 @@ defmodule Bgp.Message.Update.Attribute.MpUnreachNLRI do
   end
 
   defp encode_afi(afi) do
-    case AFN.encode_afi(afi) do
-      {:ok, afi} -> afi
-      :error -> raise NOTIFICATION, code: :update_message
-    end
+    with {:ok, afi} <- AFN.encode_afi(afi), do: afi
   end
 
   defp encode_safi(safi) do
-    case AFN.encode_safi(safi) do
-      {:ok, safi} -> safi
-      :error -> raise NOTIFICATION, code: :update_message
-    end
+    with {:ok, safi} <- AFN.encode_safi(safi), do: safi
   end
 end

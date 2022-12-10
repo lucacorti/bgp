@@ -8,7 +8,7 @@ defmodule BGP.FSM do
   require Logger
 
   @asn_2octets_max 65_535
-  @asn_trans 23_456
+  @as_trans 23_456
 
   @type connection_op :: :connect | :disconnect
   @type msg_op :: :recv | :send
@@ -36,9 +36,10 @@ defmodule BGP.FSM do
           delay_open: boolean(),
           delay_open_time: non_neg_integer(),
           extended_message: boolean(),
+          extended_optional_parameters: boolean(),
           four_octets: boolean(),
           hold_time: BGP.hold_time(),
-          internal: boolean(),
+          ibgp: boolean(),
           notification_without_open: boolean(),
           options: Server.peer_options(),
           state: state(),
@@ -60,9 +61,10 @@ defmodule BGP.FSM do
             delay_open: nil,
             delay_open_time: nil,
             extended_message: false,
+            extended_optional_parameters: false,
             four_octets: false,
             hold_time: nil,
-            internal: false,
+            ibgp: false,
             notification_without_open: nil,
             options: [],
             state: :idle,
@@ -630,10 +632,7 @@ defmodule BGP.FSM do
     }
   end
 
-  defp process_event(
-         %__MODULE__{hold_time: hold_time, state: :open_confirm} = fsm,
-         {:recv, msg}
-       ) do
+  defp process_event(%__MODULE__{hold_time: hold_time, state: :open_confirm} = fsm, {:recv, msg}) do
     case msg do
       %NOTIFICATION{} ->
         {
@@ -820,7 +819,8 @@ defmodule BGP.FSM do
         %Capabilities{
           capabilities: [
             %Capabilities.FourOctetsASN{asn: fsm.asn},
-            %Capabilities.MultiProtocol{afi: :ipv4, safi: :nlri_unicast}
+            %Capabilities.MultiProtocol{afi: :ipv4, safi: :nlri_unicast},
+            %Capabilities.ExtendedMessage{}
           ]
         }
       ]
@@ -828,30 +828,25 @@ defmodule BGP.FSM do
   end
 
   defp compose_open_asn(%__MODULE__{asn: asn}) when asn < @asn_2octets_max, do: asn
-  defp compose_open_asn(_fsm), do: @asn_trans
+  defp compose_open_asn(_fsm), do: @as_trans
 
   defp process_open(fsm, %OPEN{} = open) do
-    Enum.reduce(open.parameters, fsm, fn
+    Enum.reduce(open.parameters, %{fsm | ibgp: open.asn == fsm.asn}, fn
       %Capabilities{capabilities: capabilities}, fsm ->
-        process_open_capabilities(fsm, capabilities)
+        Enum.reduce(capabilities, fsm, &process_open_capability/2)
 
       _parameter, fsm ->
         fsm
     end)
   end
 
-  defp process_open_capabilities(fsm, capabilities) do
-    Enum.reduce(capabilities, fsm, fn
-      %Capabilities.ExtendedMessage{}, fsm ->
-        %__MODULE__{fsm | extended_message: true}
+  defp process_open_capability(%Capabilities.ExtendedMessage{}, fsm),
+    do: %__MODULE__{fsm | extended_message: true}
 
-      %Capabilities.FourOctetsASN{asn: asn}, fsm ->
-        %__MODULE__{fsm | four_octets: true, internal: asn == fsm.asn}
+  defp process_open_capability(%Capabilities.FourOctetsASN{asn: asn}, fsm),
+    do: %__MODULE__{fsm | four_octets: true, ibgp: asn == fsm.asn}
 
-      _capability, fsm ->
-        fsm
-    end)
-  end
+  defp process_open_capability(_capability, fsm), do: fsm
 
   defp increment_counter(%__MODULE__{counters: counters} = fsm, name),
     do: %__MODULE__{fsm | counters: update_in(counters, [name], &(&1 + 1))}
