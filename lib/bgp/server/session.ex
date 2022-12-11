@@ -50,8 +50,11 @@ defmodule BGP.Server.Session do
   def init(options) do
     state = %{
       buffer: <<>>,
-      options: options,
+      host: options[:host],
+      mode: options[:mode],
+      port: options[:port],
       fsm: FSM.new(Server.get_config(options[:server]), options),
+      server: options[:server],
       socket: nil
     }
 
@@ -63,10 +66,10 @@ defmodule BGP.Server.Session do
   end
 
   @impl Connection
-  def connect(info, %{options: options} = state) do
-    host = IP.Address.to_string(options[:host]) |> String.to_charlist()
+  def connect(info, %{host: host, port: port} = state) do
+    host = IP.Address.to_string(host) |> String.to_charlist()
 
-    case :gen_tcp.connect(host, options[:port], mode: :binary, active: :once) do
+    case :gen_tcp.connect(host, port, mode: :binary, active: :once) do
       {:ok, socket} ->
         Logger.debug("Connected on #{info}")
 
@@ -106,8 +109,8 @@ defmodule BGP.Server.Session do
     end
   end
 
-  def handle_call({:start, :manual}, _from, %{options: options} = state) do
-    with {:ok, state} <- trigger_event(state, {:start, :manual, options[:mode]}),
+  def handle_call({:start, :manual}, _from, %{mode: mode} = state) do
+    with {:ok, state} <- trigger_event(state, {:start, :manual, mode}),
          do: {:reply, :ok, state}
   end
 
@@ -165,12 +168,12 @@ defmodule BGP.Server.Session do
   end
 
   defp process_effect(
-         %{options: options, socket: socket} = state,
+         %{server: server, socket: socket} = state,
          {:recv, %OPEN{bgp_id: bgp_id}}
        ) do
     with {:ok, {address, _port}} <- :inet.peername(socket),
          {:ok, host} <- IP.Address.from_tuple(address),
-         {:ok, connection} <- Listener.connection_for(options[:server], host),
+         {:ok, connection} <- Listener.connection_for(server, host),
          :ok <- Listener.outbound_connection(connection, bgp_id) do
       Logger.debug("SESSION: No collision, keeping connection to peer #{address}")
       :ok
@@ -189,8 +192,8 @@ defmodule BGP.Server.Session do
     end
   end
 
-  defp process_effect(%{options: options}, {:recv, %UPDATE{} = message}),
-    do: Server.RDE.process_update(options[:server], message)
+  defp process_effect(%{server: server}, {:recv, %UPDATE{} = message}),
+    do: Server.RDE.process_update(server, message)
 
   defp process_effect(%{fsm: fsm, socket: socket}, {:send, msg}) do
     case :gen_tcp.send(socket, Message.encode(msg, fsm)) do
