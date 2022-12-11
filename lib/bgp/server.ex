@@ -3,6 +3,8 @@ defmodule BGP.Server do
 
   use Supervisor
 
+  alias BGP.FSM
+
   @type t :: module()
 
   @server_schema NimbleOptions.new!(
@@ -197,4 +199,20 @@ defmodule BGP.Server do
       strategy: :one_for_all
     )
   end
+
+  @spec check_collision(FSM.t(), BGP.bgp_id()) ::
+          :ok | {:error, :collision | :close}
+  def check_open_collision_dump(%FSM{state: :established}, _peer_bgp_id),
+    do: {:error, :collision}
+
+  def check_collision(%FSM{state: state} = fsm, peer_bgp_id)
+      when state in [:open_confirm, :open_sent] and fsm.bgp_id > peer_bgp_id do
+    {:error, :collision}
+  end
+
+  def check_collision(%FSM{state: state}, _peer_bgp_id)
+      when state in [:open_confirm, :open_sent],
+      do: {:error, :close}
+
+  def check_collision(_fsm, _peer_bgp_id), do: :ok
 end

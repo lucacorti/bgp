@@ -88,32 +88,23 @@ defmodule BGP.Server.Session do
   end
 
   @impl Connection
-  def handle_call(
-        {:incoming_connection, _peer_bgp_id},
-        _from,
-        {_socket, %{fsm: %FSM{state: :established}}} = state
-      ),
-      do: {:reply, {:error, :collision}, state}
+  def handle_call({:incoming_connection, peer_bgp_id}, _from, %{fsm: fsm} = state) do
+    case Server.check_collision(fsm, peer_bgp_id) do
+      :ok ->
+        {:reply, :ok, state}
 
-  def handle_call(
-        {:incoming_connection, peer_bgp_id},
-        _from,
-        %{fsm: %FSM{state: fsm_state} = fsm} = state
-      )
-      when fsm_state in [:open_confirm, :open_sent] do
-    if fsm.bgp_id > peer_bgp_id do
-      {:reply, {:error, :collision}, state}
-    else
-      Logger.warn("SESSION: closing connection to peer due to collision")
+      {:error, :collision} = error ->
+        {:reply, error, state}
 
-      case trigger_event(state, {:error, :open_collision_dump}) do
-        {:ok, state} -> {:reply, :ok, state}
-        {action, state} -> {action, state}
-      end
+      {:error, :close} ->
+        Logger.warn("SESSION: closing connection to peer due to collision")
+
+        case trigger_event(state, {:error, :open_collision_dump}) do
+          {:ok, state} -> {:reply, :ok, state}
+          {action, state} -> {action, state}
+        end
     end
   end
-
-  def handle_call({:incoming_connection, _peer_bgp_id}, _from, state), do: {:reply, :ok, state}
 
   def handle_call({:start, :manual}, _from, %{options: options} = state) do
     with {:ok, state} <- trigger_event(state, {:start, :manual, options[:mode]}),

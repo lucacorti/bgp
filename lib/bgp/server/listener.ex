@@ -35,7 +35,7 @@ defmodule BGP.Server.Listener do
          {:ok, state, peer} <- get_configured_peer(state, server, host),
          {:ok, state} <- trigger_event(state, socket, {:start, :automatic, :passive}),
          {:ok, state} <- trigger_event(state, socket, {:tcp_connection, :confirmed}),
-         :ok <- register_handler(state, server, peer),
+         :ok <- register_listener(state, server, peer),
          do: {:continue, state}
   end
 
@@ -68,33 +68,23 @@ defmodule BGP.Server.Listener do
   end
 
   @impl GenServer
-  def handle_call(
-        {:outbound_connection, _peer_bgp_id},
-        _from,
-        {socket, %{fsm: %FSM{state: :established}} = state}
-      ),
-      do: {:reply, {:error, :collision}, {socket, state}}
+  def handle_call({:outbound_connection, peer_bgp_id}, _from, {socket, %{fsm: fsm} = state}) do
+    case Server.check_collision(fsm, peer_bgp_id) do
+      :ok ->
+        {:reply, :ok, {socket, state}}
 
-  def handle_call(
-        {:outbound_connection, peer_bgp_id},
-        _from,
-        {socket, %{fsm: %FSM{state: fsm_state} = fsm} = state}
-      )
-      when fsm_state in [:open_confirm, :open_sent] do
-    if fsm.bgp_id > peer_bgp_id do
-      {:reply, {:error, :collision}, {socket, state}}
-    else
-      Logger.warn("LISTENER: closing connection to peer due to collision")
+      {:error, :collision} = error ->
+        {:reply, error, {socket, state}}
 
-      case trigger_event(state, socket, {:error, :open_collision_dump}) do
-        {:ok, state} -> {:stop, :normal, :ok, {socket, state}}
-        {action, state} -> {:stop, {:error, action}, :ok, {socket, state}}
-      end
+      {:error, :close} ->
+        Logger.warn("LISTENER: closing connection to peer due to collision")
+
+        case trigger_event(state, socket, {:error, :open_collision_dump}) do
+          {:ok, state} -> {:stop, :normal, :ok, {socket, state}}
+          {action, state} -> {:stop, {:error, action}, :ok, {socket, state}}
+        end
     end
   end
-
-  def handle_call({:incoming_connection, _peer_bgp_id}, _from, {socket, state}),
-    do: {:reply, :ok, {socket, state}}
 
   defp get_configured_peer(state, server, address) do
     case Server.get_peer(server, address) do
@@ -107,7 +97,7 @@ defmodule BGP.Server.Listener do
     end
   end
 
-  defp register_handler(state, server, peer) do
+  defp register_listener(state, server, peer) do
     case Registry.register(Module.concat(server, Listener.Registry), peer[:host], nil) do
       {:ok, _pid} ->
         :ok
