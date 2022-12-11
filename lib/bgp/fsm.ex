@@ -676,7 +676,7 @@ defmodule BGP.FSM do
           |> restart_timer(:hold_time, fsm.hold_time)
           |> restart_timer(:as_origination, fsm.as_origination_time)
           |> restart_timer(:route_advertisement, fsm.route_advertisement_time),
-          []
+          [{:send, compose_as_update(fsm)}]
         }
     end
   end
