@@ -4,19 +4,24 @@ defmodule BGP.FSM do
   alias BGP.{FSM.Timer, Message, Server}
   alias BGP.Message.{KEEPALIVE, NOTIFICATION, OPEN, UPDATE}
   alias BGP.Message.OPEN.Parameter.Capabilities
+  alias BGP.Message.UPDATE.Attribute
+  alias BGP.Message.UPDATE.Attribute.{ASPath, NextHop, Origin}
 
   require Logger
 
   @asn_2octets_max 65_535
   @as_trans 23_456
 
-  @type connection_op :: :connect | :disconnect
-  @type msg_op :: :recv | :send
-  @type effect :: {msg_op(), Message.t()} | {:tcp_connection, connection_op()}
-  @type start_type :: :manual | :automatic
-  @type start_passivity :: :active | :passive
   @type connection_event :: :confirmed | :fails | :request_acked
+  @type connection_op :: :connect | :disconnect
+  @type counter :: pos_integer()
+  @type msg_op :: :recv | :send
+  @type start_passivity :: :active | :passive
+  @type start_type :: :manual | :automatic
+  @type state :: :idle | :active | :open_sent | :open_confirm | :established
   @type timer_event :: :expired
+
+  @type effect :: {msg_op(), Message.t()} | {:tcp_connection, connection_op()}
 
   @type event ::
           {msg_op(), Message.t()}
@@ -26,10 +31,8 @@ defmodule BGP.FSM do
           | {:stop, start_type()}
           | {:timer, Timer.name(), timer_event()}
 
-  @type counter :: pos_integer()
-  @type state :: :idle | :active | :open_sent | :open_confirm | :established
-
   @type t :: %__MODULE__{
+          as_origination_time: non_neg_integer(),
           asn: BGP.asn(),
           bgp_id: BGP.bgp_id(),
           counters: keyword(counter()),
@@ -40,22 +43,27 @@ defmodule BGP.FSM do
           four_octets: boolean(),
           hold_time: BGP.hold_time(),
           ibgp: boolean(),
+          networks: [IP.Prefix.t()],
           notification_without_open: boolean(),
           options: Server.peer_options(),
+          route_advertisement_time: non_neg_integer(),
           state: state(),
           timers: keyword(Timer.t())
         }
 
   @enforce_keys [
+    :as_origination_time,
     :asn,
     :bgp_id,
     :delay_open,
     :delay_open_time,
     :hold_time,
     :notification_without_open,
-    :options
+    :options,
+    :route_advertisement_time
   ]
-  defstruct asn: nil,
+  defstruct as_origination_time: nil,
+            asn: nil,
             bgp_id: nil,
             counters: [connect_retry: 0],
             delay_open: nil,
@@ -65,26 +73,33 @@ defmodule BGP.FSM do
             four_octets: false,
             hold_time: nil,
             ibgp: false,
+            networks: [],
             notification_without_open: nil,
             options: [],
+            route_advertisement_time: nil,
             state: :idle,
             timers: [
+              as_origination: Timer.new(0),
               connect_retry: Timer.new(0),
               delay_open: Timer.new(0),
               hold_time: Timer.new(0),
-              keep_alive: Timer.new(0)
+              keep_alive: Timer.new(0),
+              route_advertisement: Timer.new(0)
             ]
 
   @spec new(Server.options(), Server.peer_options()) :: t()
   def new(server, peer) do
     struct(__MODULE__,
+      as_origination_time: peer[:as_origination][:seconds],
       asn: server[:asn],
       bgp_id: server[:bgp_id],
       delay_open: peer[:delay_open][:enabled],
       delay_open_time: peer[:delay_open][:seconds],
       hold_time: peer[:hold_time][:seconds],
+      networks: server[:networks],
       notification_without_open: peer[:notification_without_open],
-      options: peer
+      options: peer,
+      route_advertisement_time: peer[:route_advertisement][:seconds]
     )
   end
 
@@ -632,7 +647,7 @@ defmodule BGP.FSM do
     }
   end
 
-  defp process_event(%__MODULE__{hold_time: hold_time, state: :open_confirm} = fsm, {:recv, msg}) do
+  defp process_event(%__MODULE__{state: :open_confirm} = fsm, {:recv, msg}) do
     case msg do
       %NOTIFICATION{} ->
         {
@@ -658,7 +673,9 @@ defmodule BGP.FSM do
         {
           :ok,
           %__MODULE__{fsm | state: :established}
-          |> restart_timer(:hold_time, hold_time),
+          |> restart_timer(:hold_time, fsm.hold_time)
+          |> restart_timer(:as_origination, fsm.as_origination_time)
+          |> restart_timer(:route_advertisement, fsm.route_advertisement_time),
           []
         }
     end
@@ -685,6 +702,8 @@ defmodule BGP.FSM do
       :ok,
       %__MODULE__{fsm | state: :idle}
       |> set_timer(:connect_retry, 0)
+      |> set_timer(:as_origination, 0)
+      |> set_timer(:route_advertisement, 0)
       |> zero_counter(:connect_retry),
       [
         {:send, %NOTIFICATION{code: :cease}},
@@ -698,6 +717,8 @@ defmodule BGP.FSM do
       :ok,
       %__MODULE__{fsm | state: :idle}
       |> set_timer(:connect_retry, 0)
+      |> set_timer(:as_origination, 0)
+      |> set_timer(:route_advertisement, 0)
       |> increment_counter(:connect_retry),
       [
         {:send, %NOTIFICATION{code: :cease}},
@@ -706,11 +727,17 @@ defmodule BGP.FSM do
     }
   end
 
+  defp process_event(%__MODULE__{state: :established} = fsm, {:timer, :as_origination, :expired}) do
+    {:ok, restart_timer(fsm, :as_origination), [{:send, compose_as_update(fsm)}]}
+  end
+
   defp process_event(%__MODULE__{state: :established} = fsm, {:timer, :hold_time, :expired}) do
     {
       :ok,
       %__MODULE__{fsm | state: :idle}
       |> set_timer(:connect_retry, 0)
+      |> set_timer(:as_origination, 0)
+      |> set_timer(:route_advertisement, 0)
       |> increment_counter(:connect_retry),
       [
         {:send, %NOTIFICATION{code: :hold_timer_expired}},
@@ -727,11 +754,20 @@ defmodule BGP.FSM do
     {:ok, fsm, [{:send, %KEEPALIVE{}}]}
   end
 
+  defp process_event(
+         %__MODULE__{state: :established} = fsm,
+         {:timer, :route_advertisement, :expired}
+       ) do
+    {:ok, restart_timer(fsm, :route_advertisement), []}
+  end
+
   defp process_event(%__MODULE__{state: :established} = fsm, {:tcp_connection, :fails}) do
     {
       :ok,
       %__MODULE__{fsm | state: :idle}
       |> set_timer(:connect_retry, 0)
+      |> set_timer(:as_origination, 0)
+      |> set_timer(:route_advertisement, 0)
       |> increment_counter(:connect_retry),
       [{:tcp_connection, :disconnect}]
     }
@@ -742,6 +778,8 @@ defmodule BGP.FSM do
       :ok,
       %__MODULE__{fsm | state: :idle}
       |> set_timer(:connect_retry, 0)
+      |> set_timer(:as_origination, 0)
+      |> set_timer(:route_advertisement, 0)
       |> increment_counter(:connect_retry),
       [
         {:send, %NOTIFICATION{code: :cease}},
@@ -760,6 +798,8 @@ defmodule BGP.FSM do
           :ok,
           %__MODULE__{fsm | state: :idle}
           |> set_timer(:connect_retry, 0)
+          |> set_timer(:as_origination, 0)
+          |> set_timer(:route_advertisement, 0)
           |> increment_counter(:connect_retry),
           [
             {:send, %NOTIFICATION{code: :cease}},
@@ -772,6 +812,8 @@ defmodule BGP.FSM do
           :ok,
           %__MODULE__{fsm | state: :idle}
           |> set_timer(:connect_retry, 0)
+          |> set_timer(:as_origination, 0)
+          |> set_timer(:route_advertisement, 0)
           |> increment_counter(:connect_retry),
           [{:tcp_connection, :disconnect}]
         }
@@ -805,6 +847,8 @@ defmodule BGP.FSM do
       :ok,
       %__MODULE__{fsm | state: :idle}
       |> set_timer(:connect_retry, 0)
+      |> set_timer(:as_origination, 0)
+      |> set_timer(:route_advertisement, 0)
       |> increment_counter(:connect_retry),
       [{:send, %NOTIFICATION{code: :fsm}}, {:tcp_connection, :disconnect}]
     }
@@ -829,6 +873,17 @@ defmodule BGP.FSM do
 
   defp compose_open_asn(%__MODULE__{asn: asn}) when asn < @asn_2octets_max, do: asn
   defp compose_open_asn(_fsm), do: @as_trans
+
+  defp compose_as_update(%__MODULE__{} = fsm) do
+    %UPDATE{
+      path_attributes: [
+        %Attribute{value: %Origin{origin: :igp}},
+        %Attribute{value: %ASPath{value: [{:as_sequence, 1, [fsm.asn]}]}},
+        %Attribute{value: %NextHop{value: fsm.bgp_id}}
+      ],
+      nlri: fsm.networks
+    }
+  end
 
   defp process_open(fsm, %OPEN{} = open) do
     Enum.reduce(open.parameters, %{fsm | ibgp: open.asn == fsm.asn}, fn

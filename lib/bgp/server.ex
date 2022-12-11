@@ -16,19 +16,29 @@ defmodule BGP.Server do
                      type: {:custom, IP.Address, :from_string, []},
                      required: true
                    ],
+                   networks: [
+                     doc: "Server AS Networks to announce to peers",
+                     type: {:list, {:custom, IP.Prefix, :from_string, []}},
+                     default: []
+                   ],
                    port: [
                      doc: "Port the server listens on.",
                      type: :integer,
                      default: 179
                    ],
                    peers: [
-                     doc: "List of peer configurations.",
+                     doc: "List of peer configurations (`t:peer_options/0`).",
                      type: {:list, :keyword_list},
                      default: []
                    ]
                  )
 
   @peer_schema NimbleOptions.new!(
+                 as_origination: [
+                   type: :keyword_list,
+                   keys: [seconds: [doc: "AS Origination timer seconds.", type: :non_neg_integer]],
+                   default: [seconds: 15]
+                 ],
                  automatic: [
                    doc: "Automatically start the peering session.",
                    type: :boolean,
@@ -88,6 +98,13 @@ defmodule BGP.Server do
                    doc: "Peer TCP port.",
                    type: :integer,
                    default: 179
+                 ],
+                 route_advertisement: [
+                   type: :keyword_list,
+                   keys: [
+                     seconds: [doc: "Route Advertisement timer seconds.", type: :non_neg_integer]
+                   ],
+                   default: [seconds: 30]
                  ]
                )
 
@@ -99,7 +116,7 @@ defmodule BGP.Server do
   @type options :: keyword()
 
   @typedoc """
-  Peers options
+  Peer options
 
   #{NimbleOptions.docs(@peer_schema)}
   """

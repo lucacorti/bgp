@@ -5,6 +5,7 @@ config :logger, level: :debug
 config :bgp, BGP.MyServer,
   asn: 65_000,
   bgp_id: "172.16.1.3",
+  networks: ["12.12.0.0/20"],
   port: 179,
   peers: [
     [
