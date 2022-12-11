@@ -162,9 +162,7 @@ defmodule BGP.Server do
         |> NimbleOptions.validate!(@peer_schema)
         |> Keyword.put(:server, server)
 
-      peer_host = options[:host]
-
-      if host == peer_host do
+      if host == options[:host] do
         {:ok, options}
       else
         nil

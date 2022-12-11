@@ -9,7 +9,7 @@ defmodule BGP.MessageTest do
   import IP.Sigil
 
   setup_all _ctx do
-    %{fsm: FSM.new([asn: 65_000, bgp_id: {192, 168, 1, 1}], [])}
+    %{fsm: FSM.new([asn: 65_000, bgp_id: ~i(1.2.3.4)], hold_time: [seconds: 90])}
   end
 
   test "KEEPALIVE encode and decode", %{fsm: fsm} do
@@ -32,11 +32,9 @@ defmodule BGP.MessageTest do
              |> BGP.Message.decode(fsm)
   end
 
-  test "OPEN encode and decode", %{fsm: fsm} do
-    asn = 100
-    bgp_id = ~i(1.2.3.4)
-    hold_time = 90
-
+  test "OPEN encode and decode", %{
+    fsm: %FSM{asn: asn, bgp_id: bgp_id, hold_time: hold_time} = fsm
+  } do
     assert %OPEN{asn: ^asn, bgp_id: ^bgp_id, hold_time: ^hold_time} =
              %OPEN{asn: asn, bgp_id: bgp_id, hold_time: hold_time}
              |> BGP.Message.encode(fsm)
@@ -44,7 +42,7 @@ defmodule BGP.MessageTest do
              |> BGP.Message.decode(fsm)
   end
 
-  test "UPDATE encode and decode", %{fsm: fsm} do
+  test "UPDATE encode and decode", %{fsm: %FSM{} = fsm} do
     nlri = [
       ~i(0.0.0.0/0),
       ~i(1.0.0.0/8),
@@ -63,8 +61,8 @@ defmodule BGP.MessageTest do
 
     attributes = [
       %Attribute{transitive: 1, value: %Origin{origin: :igp}},
-      %Attribute{transitive: 1, value: %ASPath{value: [{:as_sequence, 1, [65_000]}]}},
-      %Attribute{transitive: 1, value: %NextHop{value: ~i(1.2.3.4)}}
+      %Attribute{transitive: 1, value: %ASPath{value: [{:as_sequence, 1, [fsm.asn]}]}},
+      %Attribute{transitive: 1, value: %NextHop{value: fsm.bgp_id}}
     ]
 
     assert %UPDATE{withdrawn_routes: ^withdrawn, path_attributes: ^attributes, nlri: ^nlri} =

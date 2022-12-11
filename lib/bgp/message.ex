@@ -70,26 +70,6 @@ defmodule BGP.Message do
     end)
   end
 
-  messages = [
-    {OPEN, 1},
-    {UPDATE, 2},
-    {NOTIFICATION, 3},
-    {KEEPALIVE, 4},
-    {ROUTEREFRESH, 5}
-  ]
-
-  for {module, type} <- messages do
-    defp type_for_module(unquote(module)), do: unquote(type)
-  end
-
-  for {module, type} <- messages do
-    defp module_for_type(unquote(type)), do: unquote(module)
-  end
-
-  defp module_for_type(type) do
-    raise NOTIFICATION, code: :message_header, subcode: :bad_message_type, data: <<type::8>>
-  end
-
   @spec decode_prefixes(binary()) :: [IP.Prefix.t()]
   def decode_prefixes(data), do: decode_prefixes(data, [])
 
@@ -151,5 +131,25 @@ defmodule BGP.Message do
       [<<length::8>>, <<encoded::binary-unit(1)-size(length), 0::unsigned-size(padding)>>],
       1 + div(length + padding, 8)
     }
+  end
+
+  messages = [
+    {OPEN, 1},
+    {UPDATE, 2},
+    {NOTIFICATION, 3},
+    {KEEPALIVE, 4},
+    {ROUTEREFRESH, 5}
+  ]
+
+  for {module, type} <- messages do
+    defp type_for_module(unquote(module)), do: unquote(type)
+  end
+
+  for {module, type} <- messages do
+    defp module_for_type(unquote(type)), do: unquote(module)
+  end
+
+  defp module_for_type(type) do
+    raise NOTIFICATION, code: :message_header, subcode: :bad_message_type, data: <<type::8>>
   end
 end

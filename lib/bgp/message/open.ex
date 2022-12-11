@@ -48,17 +48,46 @@ defmodule BGP.Message.OPEN do
   end
 
   defp decode_open(version, asn, hold_time, bgp_id, params, fsm) do
-    with :ok <- check_asn(asn, fsm),
-         :ok <- check_hold_time(hold_time),
-         :ok <- check_version(version),
-         {:ok, bgp_id} <- decode_bgp_id(bgp_id) do
-      %__MODULE__{
-        asn: asn,
-        bgp_id: bgp_id,
-        hold_time: hold_time,
-        parameters: decode_parameters(params, [], fsm)
-      }
+    check_asn(asn, fsm)
+    check_hold_time(hold_time)
+    check_version(version)
+
+    %__MODULE__{
+      asn: asn,
+      bgp_id: decode_bgp_id(bgp_id),
+      hold_time: hold_time,
+      parameters: decode_parameters(params, [], fsm)
+    }
+  end
+
+  defp decode_bgp_id(bgp_id) do
+    case IP.Address.from_binary(bgp_id) do
+      {:ok, prefix} ->
+        prefix
+
+      _error ->
+        raise NOTIFICATION, code: :open_message, subcode: :bad_bgp_identifier
     end
+  end
+
+  defp decode_parameters(<<>> = _data, params, _fsm), do: Enum.reverse(params)
+
+  defp decode_parameters(
+         <<type::8, param_length::16, parameter::binary-size(param_length), rest::binary>>,
+         parameters,
+         %FSM{extended_optional_parameters: true} = fsm
+       ) do
+    parameter = Parameter.decode(<<type::8, param_length::16, parameter::binary>>, fsm)
+    decode_parameters(rest, [parameter | parameters], fsm)
+  end
+
+  defp decode_parameters(
+         <<type::8, param_length::8, parameter::binary-size(param_length), rest::binary>>,
+         parameters,
+         fsm
+       ) do
+    parameter = Parameter.decode(<<type::8, param_length::8, parameter::binary>>, fsm)
+    decode_parameters(rest, [parameter | parameters], fsm)
   end
 
   defp check_asn(asn, %FSM{four_octets: true})
@@ -85,36 +114,6 @@ defmodule BGP.Message.OPEN do
       code: :open_message,
       subcode: :unsupported_version_number,
       data: <<version::16>>
-  end
-
-  defp decode_bgp_id(bgp_id) do
-    case IP.Address.from_binary(bgp_id) do
-      {:ok, prefix} ->
-        {:ok, prefix}
-
-      _error ->
-        raise NOTIFICATION, code: :open_message, subcode: :bad_bgp_identifier
-    end
-  end
-
-  defp decode_parameters(<<>> = _data, params, _fsm), do: Enum.reverse(params)
-
-  defp decode_parameters(
-         <<type::8, param_length::16, parameter::binary-size(param_length), rest::binary>>,
-         parameters,
-         %FSM{extended_optional_parameters: true} = fsm
-       ) do
-    parameter = Parameter.decode(<<type::8, param_length::16, parameter::binary>>, fsm)
-    decode_parameters(rest, [parameter | parameters], fsm)
-  end
-
-  defp decode_parameters(
-         <<type::8, param_length::8, parameter::binary-size(param_length), rest::binary>>,
-         parameters,
-         fsm
-       ) do
-    parameter = Parameter.decode(<<type::8, param_length::8, parameter::binary>>, fsm)
-    decode_parameters(rest, [parameter | parameters], fsm)
   end
 
   @impl Encoder
