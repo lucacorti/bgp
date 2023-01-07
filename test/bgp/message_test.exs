@@ -3,6 +3,7 @@ defmodule BGP.MessageTest do
 
   alias BGP.{FSM, Message}
   alias BGP.Message.{KEEPALIVE, NOTIFICATION, OPEN, UPDATE}
+  alias BGP.Message.OPEN.Capabilities
   alias BGP.Message.UPDATE.Attribute
   alias BGP.Message.UPDATE.Attribute.{ASPath, NextHop, Origin}
 
@@ -38,8 +39,13 @@ defmodule BGP.MessageTest do
   test "OPEN encode and decode", %{
     fsm: %FSM{asn: asn, bgp_id: bgp_id, hold_time: hold_time} = fsm
   } do
+    capabilities = %Capabilities{}
+
     assert {iodata, fsm} =
-             BGP.Message.encode(%OPEN{asn: asn, bgp_id: bgp_id, hold_time: hold_time}, fsm)
+             BGP.Message.encode(
+               %OPEN{asn: asn, bgp_id: bgp_id, hold_time: hold_time, capabilities: capabilities},
+               fsm
+             )
 
     assert {%OPEN{asn: ^asn, bgp_id: ^bgp_id, hold_time: ^hold_time}, _fsm} =
              iodata

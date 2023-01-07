@@ -1,8 +1,9 @@
 defmodule BGP.Message.OPEN do
   @moduledoc false
 
+  alias BGP.Message.OPEN.Capabilities
   alias BGP.{FSM, Message.Encoder}
-  alias BGP.Message.{NOTIFICATION, OPEN.Parameter}
+  alias BGP.Message.NOTIFICATION
 
   @asn_min 1
   @asn_max :math.pow(2, 16) - 1
@@ -13,10 +14,10 @@ defmodule BGP.Message.OPEN do
           asn: BGP.asn(),
           bgp_id: IP.Address.t(),
           hold_time: BGP.hold_time(),
-          parameters: [Parameter.t()]
+          capabilities: Capabilities.t()
         }
   @enforce_keys [:asn, :bgp_id, :hold_time]
-  defstruct asn: nil, bgp_id: nil, hold_time: nil, parameters: []
+  defstruct asn: nil, bgp_id: nil, hold_time: nil, capabilities: nil
 
   @behaviour Encoder
 
@@ -52,17 +53,15 @@ defmodule BGP.Message.OPEN do
     check_hold_time(hold_time)
     check_version(version)
 
-    {parameters, fsm} = decode_parameters(params, [], fsm)
-
-    {
+    decode_parameters(
+      params,
       %__MODULE__{
         asn: asn,
         bgp_id: decode_bgp_id(bgp_id),
-        hold_time: hold_time,
-        parameters: parameters
+        hold_time: hold_time
       },
       fsm
-    }
+    )
   end
 
   defp decode_bgp_id(bgp_id) do
@@ -75,24 +74,24 @@ defmodule BGP.Message.OPEN do
     end
   end
 
-  defp decode_parameters(<<>> = _data, params, fsm), do: {Enum.reverse(params), fsm}
+  defp decode_parameters(<<>> = _data, open, fsm), do: {open, fsm}
 
   defp decode_parameters(
-         <<type::8, param_length::16, parameter::binary-size(param_length), rest::binary>>,
-         parameters,
+         <<2::8, param_length::16, parameter::binary-size(param_length), rest::binary>>,
+         msg,
          %FSM{extended_optional_parameters: true} = fsm
        ) do
-    {parameter, fsm} = Parameter.decode(<<type::8, param_length::16, parameter::binary>>, fsm)
-    decode_parameters(rest, [parameter | parameters], fsm)
+    {capabilities, fsm} = Capabilities.decode(parameter, fsm)
+    decode_parameters(rest, %__MODULE__{msg | capabilities: capabilities}, fsm)
   end
 
   defp decode_parameters(
-         <<type::8, param_length::8, parameter::binary-size(param_length), rest::binary>>,
-         parameters,
+         <<2::8, param_length::8, parameter::binary-size(param_length), rest::binary>>,
+         msg,
          fsm
        ) do
-    {parameter, fsm} = Parameter.decode(<<type::8, param_length::8, parameter::binary>>, fsm)
-    decode_parameters(rest, [parameter | parameters], fsm)
+    {capabilities, fsm} = Capabilities.decode(parameter, fsm)
+    decode_parameters(rest, %__MODULE__{msg | capabilities: capabilities}, fsm)
   end
 
   defp check_asn(asn, %FSM{four_octets: true})
@@ -123,10 +122,10 @@ defmodule BGP.Message.OPEN do
 
   @impl Encoder
   def encode(
-        %__MODULE__{parameters: parameters} = msg,
+        %__MODULE__{capabilities: capabilities} = msg,
         %FSM{extended_optional_parameters: true} = fsm
       ) do
-    {data, length, fsm} = encode_parameters(parameters, fsm)
+    {data, length, fsm} = encode_capabilities(capabilities, fsm)
 
     bgp_id = IP.Address.to_integer(msg.bgp_id)
 
@@ -146,8 +145,8 @@ defmodule BGP.Message.OPEN do
     }
   end
 
-  def encode(%__MODULE__{parameters: parameters} = msg, fsm) do
-    {data, length, fsm} = encode_parameters(parameters, fsm)
+  def encode(%__MODULE__{} = msg, fsm) do
+    {data, length, fsm} = encode_capabilities(msg, fsm)
 
     bgp_id = IP.Address.to_integer(msg.bgp_id)
 
@@ -158,13 +157,26 @@ defmodule BGP.Message.OPEN do
     }
   end
 
-  defp encode_parameters(parameters, fsm) do
-    {data, {length, fsm}} =
-      Enum.map_reduce(parameters, {0, fsm}, fn parameter, {total, fsm} ->
-        {data, length, fsm} = Parameter.encode(parameter, fsm)
-        {data, {total + length, fsm}}
-      end)
+  def encode_capabilities(
+        %__MODULE__{capabilities: capabilities},
+        %FSM{extended_optional_parameters: true} = fsm
+      ) do
+    {data, length, fsm} = Capabilities.encode(capabilities, fsm)
 
-    {data, length, fsm}
+    {
+      [<<2::8>>, <<length::16>>, data],
+      3 + length,
+      fsm
+    }
+  end
+
+  def encode_capabilities(%__MODULE__{capabilities: capabilities}, fsm) do
+    {data, length, fsm} = Capabilities.encode(capabilities, fsm)
+
+    {
+      [<<2::8>>, <<length::8>>, data],
+      2 + length,
+      fsm
+    }
   end
 end

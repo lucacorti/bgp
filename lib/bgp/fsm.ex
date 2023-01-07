@@ -3,7 +3,7 @@ defmodule BGP.FSM do
 
   alias BGP.{FSM.Timer, Message, Server}
   alias BGP.Message.{KEEPALIVE, NOTIFICATION, OPEN, UPDATE}
-  alias BGP.Message.OPEN.Parameter.Capabilities
+  alias BGP.Message.OPEN.Capabilities
   alias BGP.Message.UPDATE.Attribute
   alias BGP.Message.UPDATE.Attribute.{ASPath, NextHop, Origin}
 
@@ -855,15 +855,11 @@ defmodule BGP.FSM do
       asn: compose_open_asn(fsm),
       bgp_id: fsm.bgp_id,
       hold_time: fsm.hold_time,
-      parameters: [
-        %Capabilities{
-          capabilities: [
-            %Capabilities.FourOctetsASN{asn: fsm.asn},
-            %Capabilities.MultiProtocol{afi: :ipv4, safi: :nlri_unicast},
-            %Capabilities.ExtendedMessage{}
-          ]
-        }
-      ]
+      capabilities: %Capabilities{
+        four_octets_asn: true,
+        multi_protocol: {:ipv4, :nlri_unicast},
+        extended_message: true
+      }
     }
   end
 
