@@ -33,8 +33,8 @@ defmodule BGP.Message.UPDATE.Attribute.Communities do
   @behaviour Encoder
 
   @impl Encoder
-  def decode(<<communities::binary>>, _fsm),
-    do: %__MODULE__{communities: decode_communities(communities, [])}
+  def decode(<<communities::binary>>, fsm),
+    do: {%__MODULE__{communities: decode_communities(communities, [])}, fsm}
 
   defp decode_communities(<<>>, communities), do: Enum.reverse(communities)
 
@@ -46,10 +46,13 @@ defmodule BGP.Message.UPDATE.Attribute.Communities do
   end
 
   @impl Encoder
-  def encode(%__MODULE__{communities: communities}, _fsm) do
-    Enum.map_reduce(communities, 0, fn community, length ->
-      {encode_community(community), length + 4}
-    end)
+  def encode(%__MODULE__{communities: communities}, fsm) do
+    {data, length} =
+      Enum.map_reduce(communities, 0, fn community, length ->
+        {encode_community(community), length + 4}
+      end)
+
+    {data, length, fsm}
   end
 
   for {code, community} <- communities do

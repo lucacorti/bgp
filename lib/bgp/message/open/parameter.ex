@@ -23,20 +23,22 @@ defmodule BGP.Message.OPEN.Parameter do
 
   @impl Encoder
   def encode(%module{} = message, %FSM{extended_optional_parameters: true} = fsm) do
-    {data, length} = module.encode(message, fsm)
+    {data, length, fsm} = module.encode(message, fsm)
 
     {
       [<<type_for_module(module)::8>>, <<length::16>>, data],
-      3 + length
+      3 + length,
+      fsm
     }
   end
 
   def encode(%module{} = message, fsm) do
-    {data, length} = module.encode(message, fsm)
+    {data, length, fsm} = module.encode(message, fsm)
 
     {
       [<<type_for_module(module)::8>>, <<length::8>>, data],
-      2 + length
+      2 + length,
+      fsm
     }
   end
 

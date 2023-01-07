@@ -7,6 +7,6 @@ defmodule BGP.Message.Encoder do
   @type data :: iodata()
   @type length :: non_neg_integer()
 
-  @callback decode(data(), FSM.t()) :: t() | no_return()
-  @callback encode(t(), FSM.t()) :: {data(), length()}
+  @callback decode(data(), FSM.t()) :: {t(), FSM.t()} | no_return()
+  @callback encode(t(), FSM.t()) :: {data(), length(), FSM.t()}
 end

@@ -13,10 +13,10 @@ defmodule BGP.Message.UPDATE.Attribute.OriginatorId do
   @behaviour Encoder
 
   @impl Encoder
-  def decode(address, _fsm) do
+  def decode(address, fsm) do
     case IP.Address.from_binary(address) do
       {:ok, prefix} ->
-        %__MODULE__{value: prefix}
+        {%__MODULE__{value: prefix}, fsm}
 
       {:error, _reason} ->
         raise NOTIFICATION, code: :update_message, subcode: :invalid_nexthop_attribute
@@ -24,8 +24,7 @@ defmodule BGP.Message.UPDATE.Attribute.OriginatorId do
   end
 
   @impl Encoder
-  def encode(%__MODULE__{value: value}, _fsm) do
-    prefix = IP.Address.to_integer(value)
-    {[<<32::8>>, <<prefix::32>>], 5}
+  def encode(%__MODULE__{value: value}, fsm) do
+    {[<<32::8>>, <<IP.Address.to_integer(value)::32>>], 5, fsm}
   end
 end

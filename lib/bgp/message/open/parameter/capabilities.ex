@@ -19,30 +19,35 @@ defmodule BGP.Message.OPEN.Parameter.Capabilities do
   @behaviour Encoder
 
   @impl Encoder
-  def decode(data, fsm),
-    do: %__MODULE__{capabilities: decode_capabilities(data, [], fsm)}
+  def decode(data, fsm) do
+    {capabilities, fsm} = decode_capabilities(data, [], fsm)
+    {%__MODULE__{capabilities: capabilities}, fsm}
+  end
 
-  defp decode_capabilities(<<>>, capabilities, _fsm), do: Enum.reverse(capabilities)
+  defp decode_capabilities(<<>>, capabilities, fsm), do: {Enum.reverse(capabilities), fsm}
 
   defp decode_capabilities(
          <<code::8, length::8, value::binary-size(length), rest::binary>>,
          capabilities,
          fsm
        ) do
-    capability = module_for_type(code).decode(value, fsm)
+    {capability, fsm} = module_for_type(code).decode(value, fsm)
     decode_capabilities(rest, [capability | capabilities], fsm)
   end
 
   @impl Encoder
   def encode(%__MODULE__{capabilities: capabilities}, fsm) do
-    Enum.map_reduce(capabilities, 0, fn %module{} = capability, length ->
-      {data, capability_length} = module.encode(capability, fsm)
+    {data, {length, fsm}} =
+      Enum.map_reduce(capabilities, {0, fsm}, fn %module{} = capability, {length, fsm} ->
+        {data, capability_length, fsm} = module.encode(capability, fsm)
 
-      {
-        [<<type_for_module(module)::8>>, <<capability_length::8>>, data],
-        length + 2 + capability_length
-      }
-    end)
+        {
+          [<<type_for_module(module)::8>>, <<capability_length::8>>, data],
+          {length + 2 + capability_length, fsm}
+        }
+      end)
+
+    {data, length, fsm}
   end
 
   attributes = [

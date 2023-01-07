@@ -14,8 +14,8 @@ defmodule BGP.Message.OPEN.Parameter.Capabilities.GracefulRestart do
   @behaviour Encoder
 
   @impl Encoder
-  def decode(<<restarted::1, _reserved::3, time::12, rest::binary>>, _fsm),
-    do: %__MODULE__{restarted: restarted == 1, time: time, afs: decode_afs(rest, [])}
+  def decode(<<restarted::1, _reserved::3, time::12, rest::binary>>, fsm),
+    do: {%__MODULE__{restarted: restarted == 1, time: time, afs: decode_afs(rest, [])}, fsm}
 
   def decode(_data, _fsm) do
     raise NOTIFICATION, code: :open_message
@@ -41,5 +41,5 @@ defmodule BGP.Message.OPEN.Parameter.Capabilities.GracefulRestart do
   end
 
   @impl Encoder
-  def encode(_multi_protocol, _fsm), do: {<<>>, 0}
+  def encode(_multi_protocol, fsm), do: {<<>>, 0, fsm}
 end

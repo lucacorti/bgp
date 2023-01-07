@@ -13,11 +13,11 @@ defmodule BGP.Message.UPDATE.Attribute.AS4Aggregator do
   @behaviour Encoder
 
   @impl Encoder
-  def decode(<<asn::32, prefix::binary-size(4)>>, _fsm)
+  def decode(<<asn::32, prefix::binary-size(4)>>, fsm)
       when asn > 0 and asn < @asn_four_octets_max do
     case IP.Address.from_binary(prefix) do
       {:ok, address} ->
-        %__MODULE__{asn: asn, address: address}
+        {%__MODULE__{asn: asn, address: address}, fsm}
 
       {:error, _reason} ->
         raise NOTIFICATION, code: :update_message, subcode: :malformed_attribute_list
@@ -29,12 +29,13 @@ defmodule BGP.Message.UPDATE.Attribute.AS4Aggregator do
   end
 
   @impl Encoder
-  def encode(%__MODULE__{asn: asn, address: address}, _fsm) do
+  def encode(%__MODULE__{asn: asn, address: address}, fsm) do
     prefix = IP.Address.to_integer(address)
 
     {
       [<<asn::32>>, <<prefix::32>>],
-      8
+      8,
+      fsm
     }
   end
 end

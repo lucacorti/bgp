@@ -12,7 +12,7 @@ defmodule BGP.Message do
   @max_size 4_096
   @extended_max_size 65_535
 
-  @spec decode(binary(), FSM.t()) :: t()
+  @spec decode(binary(), FSM.t()) :: {t(), FSM.t()} | no_return()
   def decode(<<header::binary-size(@header_size), msg::binary>>, fsm) do
     {module, length} = decode_header(header)
     check_length(module, length, fsm)
@@ -40,27 +40,30 @@ defmodule BGP.Message do
 
   defp check_length(_module, _length, _fsm), do: :ok
 
-  @spec encode(t(), FSM.t()) :: iodata()
+  @spec encode(t(), FSM.t()) :: {iodata(), FSM.t()} | no_return()
   def encode(%module{} = message, fsm) do
-    {data, length} = module.encode(message, fsm)
+    {data, length, fsm} = module.encode(message, fsm)
 
-    [
-      <<@marker::@marker_size>>,
-      <<@header_size + length::16>>,
-      <<type_for_module(module)::8>>,
-      data
-    ]
+    {
+      [
+        <<@marker::@marker_size>>,
+        <<@header_size + length::16>>,
+        <<type_for_module(module)::8>>,
+        data
+      ],
+      fsm
+    }
   end
 
-  @spec stream!(iodata(), FSM.t()) :: Enumerable.t() | no_return()
-  def stream!(data, fsm) do
+  @spec stream!(iodata()) :: Enumerable.t() | no_return()
+  def stream!(data) do
     Stream.unfold(data, fn
       <<_marker::@marker_size, length::16, _type::8, _rest::binary>> = data
       when byte_size(data) >= length ->
-        msg = binary_part(data, 0, length)
+        msg_data = binary_part(data, 0, length)
         rest_size = byte_size(data) - length
         rest_data = binary_part(data, length, rest_size)
-        {{rest_data, decode(msg, fsm)}, rest_data}
+        {{rest_data, msg_data}, rest_data}
 
       <<>> ->
         nil

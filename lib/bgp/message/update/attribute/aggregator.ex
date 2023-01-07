@@ -15,22 +15,22 @@ defmodule BGP.Message.UPDATE.Attribute.Aggregator do
   @behaviour Encoder
 
   @impl Encoder
-  def decode(<<asn::32, prefix::binary-size(4)>>, %FSM{four_octets: true})
+  def decode(<<asn::32, prefix::binary-size(4)>>, %FSM{four_octets: true} = fsm)
       when asn > 0 and asn < @asn_four_octets_max do
     case IP.Address.from_binary(prefix) do
       {:ok, address} ->
-        %__MODULE__{asn: asn, address: address}
+        {%__MODULE__{asn: asn, address: address}, fsm}
 
       {:error, _reason} ->
         raise NOTIFICATION, code: :update_message, subcode: :malformed_attribute_list
     end
   end
 
-  def decode(<<asn::16, prefix::binary-size(2)>>, %FSM{four_octets: false})
+  def decode(<<asn::16, prefix::binary-size(2)>>, %FSM{four_octets: false} = fsm)
       when asn > 0 and asn < @asn_max do
     case IP.Address.from_binary(prefix) do
       {:ok, address} ->
-        %__MODULE__{asn: asn, address: address}
+        {%__MODULE__{asn: asn, address: address}, fsm}
 
       {:error, _reason} ->
         raise NOTIFICATION, code: :update_message, subcode: :malformed_attribute_list
@@ -48,7 +48,8 @@ defmodule BGP.Message.UPDATE.Attribute.Aggregator do
 
     {
       [<<asn::size(asn_length)>>, <<prefix::32>>],
-      div(asn_length, 8) + 4
+      div(asn_length, 8) + 4,
+      fsm
     }
   end
 

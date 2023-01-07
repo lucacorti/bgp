@@ -236,7 +236,6 @@ defmodule BGP.FSM do
         {
           :ok,
           %__MODULE__{fsm | state: :open_confirm}
-          |> process_open(open)
           |> stop_timer(:connect_retry)
           |> set_timer(:connect_retry, 0)
           |> stop_timer(:delay_open)
@@ -397,7 +396,6 @@ defmodule BGP.FSM do
         {
           :ok,
           %__MODULE__{fsm | state: :open_confirm}
-          |> process_open(open)
           |> stop_timer(:connect_retry)
           |> set_timer(:connect_retry, 0)
           |> stop_timer(:delay_open)
@@ -511,7 +509,6 @@ defmodule BGP.FSM do
         {
           :ok,
           %__MODULE__{fsm | state: :open_confirm}
-          |> process_open(open)
           |> set_timer(:delay_open, 0)
           |> set_timer(:connect_retry, 0)
           |> restart_timer(:keep_alive, div(hold_time, 3))
@@ -526,7 +523,6 @@ defmodule BGP.FSM do
         {
           :ok,
           %__MODULE__{fsm | state: :open_confirm}
-          |> process_open(open)
           |> set_timer(:delay_open, 0)
           |> set_timer(:connect_retry, 0)
           |> stop_timer(:keep_alive),
@@ -884,24 +880,6 @@ defmodule BGP.FSM do
       nlri: fsm.networks
     }
   end
-
-  defp process_open(fsm, %OPEN{} = open) do
-    Enum.reduce(open.parameters, %{fsm | ibgp: open.asn == fsm.asn}, fn
-      %Capabilities{capabilities: capabilities}, fsm ->
-        Enum.reduce(capabilities, fsm, &process_open_capability/2)
-
-      _parameter, fsm ->
-        fsm
-    end)
-  end
-
-  defp process_open_capability(%Capabilities.ExtendedMessage{}, fsm),
-    do: %__MODULE__{fsm | extended_message: true}
-
-  defp process_open_capability(%Capabilities.FourOctetsASN{asn: asn}, fsm),
-    do: %__MODULE__{fsm | four_octets: true, ibgp: asn == fsm.asn}
-
-  defp process_open_capability(_capability, fsm), do: fsm
 
   defp increment_counter(%__MODULE__{counters: counters} = fsm, name),
     do: %__MODULE__{fsm | counters: update_in(counters, [name], &(&1 + 1))}

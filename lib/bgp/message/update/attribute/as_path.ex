@@ -17,7 +17,7 @@ defmodule BGP.Message.UPDATE.Attribute.ASPath do
 
   @impl Encoder
   def decode(data, fsm) do
-    %__MODULE__{value: decode_path(data, fsm, [])}
+    {%__MODULE__{value: decode_path(data, fsm, [])}, fsm}
   end
 
   defp decode_path(<<>>, _fsm, path), do: Enum.reverse(path)
@@ -46,22 +46,25 @@ defmodule BGP.Message.UPDATE.Attribute.ASPath do
   def encode(%__MODULE__{value: value}, %FSM{four_octets: four_octets} = fsm) do
     asn_length = asn_length(fsm)
 
-    Enum.map_reduce(value, 0, fn {type, length, asns}, path_length ->
-      {
-        [
-          <<encode_type(type)::8>>,
-          <<length::8>>,
-          Enum.map(asns, fn
-            asn when not four_octets and asn > @asn_2octets_max ->
-              <<@as_trans::size(asn_length)>>
+    {data, length} =
+      Enum.map_reduce(value, 0, fn {type, length, asns}, path_length ->
+        {
+          [
+            <<encode_type(type)::8>>,
+            <<length::8>>,
+            Enum.map(asns, fn
+              asn when not four_octets and asn > @asn_2octets_max ->
+                <<@as_trans::size(asn_length)>>
 
-            asn ->
-              <<asn::size(asn_length)>>
-          end)
-        ],
-        path_length + 2 + length * div(asn_length, 8)
-      }
-    end)
+              asn ->
+                <<asn::size(asn_length)>>
+            end)
+          ],
+          path_length + 2 + length * div(asn_length, 8)
+        }
+      end)
+
+    {data, length, fsm}
   end
 
   defp encode_type(:as_set), do: 1

@@ -96,17 +96,22 @@ defmodule BGP.Message.UPDATE.Attribute do
     module = module_for_type(code)
     check_flags(module, optional, transitive, partial, data)
 
-    %__MODULE__{
-      optional: optional,
-      partial: partial,
-      transitive: transitive,
-      value: module.decode(attribute, fsm)
+    {value, fsm} = module.decode(attribute, fsm)
+
+    {
+      %__MODULE__{
+        optional: optional,
+        partial: partial,
+        transitive: transitive,
+        value: value
+      },
+      fsm
     }
   end
 
   @impl Encoder
   def encode(%__MODULE__{value: %module{} = value} = attribute, fsm) do
-    {data, length} = module.encode(value, fsm)
+    {data, length, fsm} = module.encode(value, fsm)
     extended = if length > 255, do: 1, else: 0
     length_size = 8 + 8 * extended
 
@@ -123,7 +128,8 @@ defmodule BGP.Message.UPDATE.Attribute do
         <<length::size(length_size)>>,
         data
       ],
-      2 + div(length_size, 8) + length
+      2 + div(length_size, 8) + length,
+      fsm
     }
   end
 

@@ -40,20 +40,22 @@ defmodule BGP.Server.Listener do
   end
 
   @impl Handler
-  def handle_data(data, socket, %{buffer: buffer, fsm: fsm} = state) do
+  def handle_data(data, socket, %{buffer: buffer} = state) do
     (buffer <> data)
-    |> Message.stream!(fsm)
-    |> Enum.reduce({:continue, state}, fn {rest, msg}, {:continue, state} ->
-      with {:ok, state} <- trigger_event(state, socket, {:recv, msg}),
-           do: {:continue, %{state | buffer: rest}}
+    |> Message.stream!()
+    |> Enum.reduce({:continue, state}, fn {rest, data}, {:continue, %{fsm: fsm} = state} ->
+      with {msg, fsm} <- Message.decode(data, fsm),
+           {:ok, state} <- trigger_event(%{state | fsm: fsm}, socket, {:recv, msg}) do
+        {:continue, %{state | buffer: rest}}
+      end
     end)
   catch
     :error, %NOTIFICATION{} = error ->
       Logger.error("error while processing received message: #{inspect(error)}")
 
       case trigger_event(state, socket, {:send, error}) do
-        {:ok, state} -> {:noreply, {socket, state}}
-        {_action, state} -> {:close, state}
+        {:ok, state} -> {:continue, state}
+        {action, state} -> {action, state}
       end
   end
 
@@ -109,20 +111,17 @@ defmodule BGP.Server.Listener do
   end
 
   defp trigger_event(%{fsm: fsm} = state, socket, event) do
-    with {:ok, fsm, effects} <- FSM.event(fsm, event),
-         do: process_effects(%{state | fsm: fsm}, socket, effects)
-  end
+    with {:ok, fsm, effects} <- FSM.event(fsm, event) do
+      Enum.reduce(effects, {:ok, %{state | fsm: fsm}}, fn effect, {action, state} ->
+        case process_effect(state, socket, effect) do
+          {:ok, state} ->
+            {action, state}
 
-  defp process_effects(state, socket, effects) do
-    Enum.reduce(effects, {:ok, state}, fn effect, return ->
-      case process_effect(state, socket, effect) do
-        :ok ->
-          return
-
-        {action, state} ->
-          {action, state}
-      end
-    end)
+          {action, state} ->
+            {action, state}
+        end
+      end)
+    end
   end
 
   defp process_effect(%{server: server} = state, socket, {:recv, %OPEN{} = open}) do
@@ -132,7 +131,7 @@ defmodule BGP.Server.Listener do
          {:ok, session} <- Session.session_for(server, host),
          :ok <- Session.incoming_connection(session, open.bgp_id) do
       Logger.debug("LISTENER: No collision, keeping connection from peer #{inspect(address)}")
-      :ok
+      {:ok, state}
     else
       {:error, :collision} ->
         Logger.warn("LISTENER: Connection from peer #{inspect(address)} collides, closing")
@@ -151,13 +150,16 @@ defmodule BGP.Server.Listener do
     end
   end
 
-  defp process_effect(%{server: server}, _socket, {:recv, %UPDATE{} = message}),
-    do: Server.RDE.process_update(server, message)
+  defp process_effect(%{server: server} = state, _socket, {:recv, %UPDATE{} = message}) do
+    with :ok <- Server.RDE.process_update(server, message), do: {:ok, state}
+  end
 
   defp process_effect(%{fsm: fsm} = state, socket, {:send, msg}) do
-    case Socket.send(socket, Message.encode(msg, fsm)) do
-      :ok -> :ok
-      {:error, _reason} -> {:close, state}
+    {data, fsm} = Message.encode(msg, fsm)
+
+    case Socket.send(socket, data) do
+      :ok -> {:ok, %{state | fsm: fsm}}
+      {:error, _reason} -> {:close, %{state | fsm: fsm}}
     end
   end
 

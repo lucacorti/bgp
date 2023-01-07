@@ -42,8 +42,8 @@ defmodule BGP.Message.UPDATE.Attribute.IPv6ExtendedCommunities do
   @behaviour Encoder
 
   @impl Encoder
-  def decode(<<data::binary>>, _fsm),
-    do: %__MODULE__{extended_communities: decode_extended_communities(data, [])}
+  def decode(<<data::binary>>, fsm),
+    do: {%__MODULE__{extended_communities: decode_extended_communities(data, [])}, fsm}
 
   defp decode_extended_communities(<<>>, extended_communities),
     do: Enum.reverse(extended_communities)
@@ -55,9 +55,12 @@ defmodule BGP.Message.UPDATE.Attribute.IPv6ExtendedCommunities do
        do: decode_extended_communities(rest, [{type, subtype} | extended_communities])
 
   @impl Encoder
-  def encode(%__MODULE__{extended_communities: extended_communities}, _fsm) do
-    Enum.map_reduce(extended_communities, 0, fn {asn, data1, data2}, length ->
-      {[<<asn::32>>, <<data1::32>>, <<data2::32>>], length + 12}
-    end)
+  def encode(%__MODULE__{extended_communities: extended_communities}, fsm) do
+    {data, length} =
+      Enum.map_reduce(extended_communities, 0, fn {asn, data1, data2}, length ->
+        {[<<asn::32>>, <<data1::32>>, <<data2::32>>], length + 12}
+      end)
+
+    {data, length, fsm}
   end
 end

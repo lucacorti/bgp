@@ -12,16 +12,18 @@ defmodule BGP.Message.UPDATE.Attribute.Origin do
   @behaviour Encoder
 
   @impl Encoder
-  def decode(<<0::8>>, _fsm), do: %__MODULE__{origin: :igp}
-  def decode(<<1::8>>, _fsm), do: %__MODULE__{origin: :egp}
-  def decode(<<2::8>>, _fsm), do: %__MODULE__{origin: :incomplete}
+  def decode(data, fsm), do: {%__MODULE__{origin: decode_origin(data)}, fsm}
 
-  def decode(_data, _fsm) do
+  def decode_origin(<<0::8>>), do: :igp
+  def decode_origin(<<1::8>>), do: :egp
+  def decode_origin(<<2::8>>), do: :incomplete
+
+  def decode_origin(_data) do
     raise NOTIFICATION, code: :update_message, subcode: :invalid_origin_attribute
   end
 
   @impl Encoder
-  def encode(%__MODULE__{origin: origin}, _fsm), do: {encode_origin(origin), 1}
+  def encode(%__MODULE__{origin: origin}, fsm), do: {encode_origin(origin), 1, fsm}
 
   defp encode_origin(:igp), do: <<0::8>>
   defp encode_origin(:egp), do: <<1::8>>

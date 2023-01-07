@@ -52,11 +52,16 @@ defmodule BGP.Message.OPEN do
     check_hold_time(hold_time)
     check_version(version)
 
-    %__MODULE__{
-      asn: asn,
-      bgp_id: decode_bgp_id(bgp_id),
-      hold_time: hold_time,
-      parameters: decode_parameters(params, [], fsm)
+    {parameters, fsm} = decode_parameters(params, [], fsm)
+
+    {
+      %__MODULE__{
+        asn: asn,
+        bgp_id: decode_bgp_id(bgp_id),
+        hold_time: hold_time,
+        parameters: parameters
+      },
+      fsm
     }
   end
 
@@ -70,14 +75,14 @@ defmodule BGP.Message.OPEN do
     end
   end
 
-  defp decode_parameters(<<>> = _data, params, _fsm), do: Enum.reverse(params)
+  defp decode_parameters(<<>> = _data, params, fsm), do: {Enum.reverse(params), fsm}
 
   defp decode_parameters(
          <<type::8, param_length::16, parameter::binary-size(param_length), rest::binary>>,
          parameters,
          %FSM{extended_optional_parameters: true} = fsm
        ) do
-    parameter = Parameter.decode(<<type::8, param_length::16, parameter::binary>>, fsm)
+    {parameter, fsm} = Parameter.decode(<<type::8, param_length::16, parameter::binary>>, fsm)
     decode_parameters(rest, [parameter | parameters], fsm)
   end
 
@@ -86,7 +91,7 @@ defmodule BGP.Message.OPEN do
          parameters,
          fsm
        ) do
-    parameter = Parameter.decode(<<type::8, param_length::8, parameter::binary>>, fsm)
+    {parameter, fsm} = Parameter.decode(<<type::8, param_length::8, parameter::binary>>, fsm)
     decode_parameters(rest, [parameter | parameters], fsm)
   end
 
@@ -121,7 +126,7 @@ defmodule BGP.Message.OPEN do
         %__MODULE__{parameters: parameters} = msg,
         %FSM{extended_optional_parameters: true} = fsm
       ) do
-    {data, length} = encode_parameters(parameters, fsm)
+    {data, length, fsm} = encode_parameters(parameters, fsm)
 
     bgp_id = IP.Address.to_integer(msg.bgp_id)
 
@@ -136,25 +141,30 @@ defmodule BGP.Message.OPEN do
         <<length::16>>,
         data
       ],
-      13 + length
+      13 + length,
+      fsm
     }
   end
 
   def encode(%__MODULE__{parameters: parameters} = msg, fsm) do
-    {data, length} = encode_parameters(parameters, fsm)
+    {data, length, fsm} = encode_parameters(parameters, fsm)
 
     bgp_id = IP.Address.to_integer(msg.bgp_id)
 
     {
       [<<4::8>>, <<msg.asn::16>>, <<msg.hold_time::16>>, <<bgp_id::32>>, <<length::8>>, data],
-      10 + length
+      10 + length,
+      fsm
     }
   end
 
   defp encode_parameters(parameters, fsm) do
-    Enum.map_reduce(parameters, 0, fn parameter, total ->
-      {data, length} = Parameter.encode(parameter, fsm)
-      {data, total + length}
-    end)
+    {data, {length, fsm}} =
+      Enum.map_reduce(parameters, {0, fsm}, fn parameter, {total, fsm} ->
+        {data, length, fsm} = Parameter.encode(parameter, fsm)
+        {data, {total + length, fsm}}
+      end)
+
+    {data, length, fsm}
   end
 end

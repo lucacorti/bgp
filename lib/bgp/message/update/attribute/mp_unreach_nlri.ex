@@ -17,11 +17,14 @@ defmodule BGP.Message.UPDATE.Attribute.MpUnreachNLRI do
   @behaviour Encoder
 
   @impl Encoder
-  def decode(<<afi::16, safi::8, withdrawn_routes::binary>>, _fsm) do
-    %__MODULE__{
-      afi: decode_afi(afi),
-      safi: decode_safi(safi),
-      withdrawn_routes: Message.decode_prefixes(withdrawn_routes)
+  def decode(<<afi::16, safi::8, withdrawn_routes::binary>>, fsm) do
+    {
+      %__MODULE__{
+        afi: decode_afi(afi),
+        safi: decode_safi(safi),
+        withdrawn_routes: Message.decode_prefixes(withdrawn_routes)
+      },
+      fsm
     }
   end
 
@@ -44,7 +47,7 @@ defmodule BGP.Message.UPDATE.Attribute.MpUnreachNLRI do
   end
 
   @impl Encoder
-  def encode(%__MODULE__{} = message, _fsm) do
+  def encode(%__MODULE__{} = message, fsm) do
     {withdrawn_routes, length} = Message.encode_prefixes(message.withdrawn_routes)
 
     {
@@ -53,7 +56,8 @@ defmodule BGP.Message.UPDATE.Attribute.MpUnreachNLRI do
         <<encode_safi(message.safi)::8>>,
         withdrawn_routes
       ],
-      3 + length
+      3 + length,
+      fsm
     }
   end
 

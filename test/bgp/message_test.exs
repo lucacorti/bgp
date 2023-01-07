@@ -1,7 +1,7 @@
 defmodule BGP.MessageTest do
   use ExUnit.Case
 
-  alias BGP.FSM
+  alias BGP.{FSM, Message}
   alias BGP.Message.{KEEPALIVE, NOTIFICATION, OPEN, UPDATE}
   alias BGP.Message.UPDATE.Attribute
   alias BGP.Message.UPDATE.Attribute.{ASPath, NextHop, Origin}
@@ -13,11 +13,12 @@ defmodule BGP.MessageTest do
   end
 
   test "KEEPALIVE encode and decode", %{fsm: fsm} do
-    assert %KEEPALIVE{} =
-             %KEEPALIVE{}
-             |> BGP.Message.encode(fsm)
+    assert {iodata, fsm} = Message.encode(%KEEPALIVE{}, fsm)
+
+    assert {%KEEPALIVE{}, _fsm} =
+             iodata
              |> IO.iodata_to_binary()
-             |> BGP.Message.decode(fsm)
+             |> Message.decode(fsm)
   end
 
   test "NOTIFICATION encode and decode", %{fsm: fsm} do
@@ -25,9 +26,11 @@ defmodule BGP.MessageTest do
     subcode = :unspecific
     data = <<>>
 
-    assert %NOTIFICATION{code: ^code, subcode: ^subcode, data: ^data} =
-             %NOTIFICATION{code: code, subcode: subcode, data: data}
-             |> BGP.Message.encode(fsm)
+    assert {iodata, fsm} =
+             BGP.Message.encode(%NOTIFICATION{code: code, subcode: subcode, data: data}, fsm)
+
+    assert {%NOTIFICATION{code: ^code, subcode: ^subcode, data: ^data}, _fsm} =
+             iodata
              |> IO.iodata_to_binary()
              |> BGP.Message.decode(fsm)
   end
@@ -35,9 +38,11 @@ defmodule BGP.MessageTest do
   test "OPEN encode and decode", %{
     fsm: %FSM{asn: asn, bgp_id: bgp_id, hold_time: hold_time} = fsm
   } do
-    assert %OPEN{asn: ^asn, bgp_id: ^bgp_id, hold_time: ^hold_time} =
-             %OPEN{asn: asn, bgp_id: bgp_id, hold_time: hold_time}
-             |> BGP.Message.encode(fsm)
+    assert {iodata, fsm} =
+             BGP.Message.encode(%OPEN{asn: asn, bgp_id: bgp_id, hold_time: hold_time}, fsm)
+
+    assert {%OPEN{asn: ^asn, bgp_id: ^bgp_id, hold_time: ^hold_time}, _fsm} =
+             iodata
              |> IO.iodata_to_binary()
              |> BGP.Message.decode(fsm)
   end
@@ -65,9 +70,15 @@ defmodule BGP.MessageTest do
       %Attribute{transitive: 1, value: %NextHop{value: fsm.bgp_id}}
     ]
 
-    assert %UPDATE{withdrawn_routes: ^withdrawn, path_attributes: ^attributes, nlri: ^nlri} =
-             %UPDATE{withdrawn_routes: withdrawn, path_attributes: attributes, nlri: nlri}
-             |> BGP.Message.encode(fsm)
+    assert {iodata, fsm} =
+             BGP.Message.encode(
+               %UPDATE{withdrawn_routes: withdrawn, path_attributes: attributes, nlri: nlri},
+               fsm
+             )
+
+    assert {%UPDATE{withdrawn_routes: ^withdrawn, path_attributes: ^attributes, nlri: ^nlri},
+            _fsm} =
+             iodata
              |> IO.iodata_to_binary()
              |> BGP.Message.decode(fsm)
   end
