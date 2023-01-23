@@ -24,7 +24,7 @@ defmodule BGP.MixProject do
   defp deps do
     [
       {:connection, "~> 1.0"},
-      {:ip, "~> 1.0"},
+      {:ip, "~> 2.0"},
       {:nimble_options, "~> 0.4"},
       {:thousand_island, "~> 0.5"},
       {:credo, "~> 1.0", only: :dev, runtime: false},
