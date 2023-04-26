@@ -141,10 +141,20 @@ defmodule BGP.Server do
 
   @spec get_config(t()) :: keyword()
   def get_config(server) do
-    server.__otp_app__()
-    |> Application.get_env(server, [])
-    |> NimbleOptions.validate!(@server_schema)
-    |> Keyword.put(:server, server)
+    config = :persistent_term.get(server, nil)
+
+    if is_nil(config) do
+      config =
+        server.__otp_app__()
+        |> Application.get_env(server, [])
+        |> NimbleOptions.validate!(@server_schema)
+        |> Keyword.put(:server, server)
+
+      :ok = :persistent_term.put(server, config)
+      config
+    else
+      config
+    end
   end
 
   @spec get_peer(t(), IP.Address.t()) :: {:ok, keyword()} | {:error, :not_found}
