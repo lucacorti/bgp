@@ -7,35 +7,14 @@ defmodule BGP.Server do
 
   @type t :: module()
 
-  @server_schema asn: [
-                   doc: "Server Autonomous System Number.",
-                   type: :pos_integer,
-                   required: true
-                 ],
-                 bgp_id: [
-                   doc: "Server BGP ID, IP address as string.",
-                   type: {:custom, IP.Address, :from_string, []},
-                   required: true
-                 ],
-                 networks: [
-                   doc: "Server AS Networks to announce to peers",
-                   type: {:list, {:custom, IP.Prefix, :from_string, []}},
-                   default: []
-                 ],
-                 port: [
-                   doc: "Port the server listens on.",
-                   type: :integer,
-                   default: 179
-                 ],
-                 peers: [
-                   doc: "List of peer configurations (`t:peer_options/0`).",
-                   type: {:list, :keyword_list},
-                   default: []
-                 ]
-
   @peer_schema as_origination: [
                  type: :keyword_list,
-                 keys: [seconds: [doc: "AS Origination timer seconds.", type: :non_neg_integer]],
+                 keys: [
+                   seconds: [
+                     doc: "AS Origination timer seconds.",
+                     type: :non_neg_integer
+                   ]
+                 ],
                  default: [seconds: 15]
                ],
                automatic: [
@@ -70,7 +49,9 @@ defmodule BGP.Server do
                ],
                hold_time: [
                  type: :keyword_list,
-                 keys: [seconds: [doc: "Hold Time timer seconds.", type: :non_neg_integer]],
+                 keys: [
+                   seconds: [doc: "Hold Time timer seconds.", type: :non_neg_integer]
+                 ],
                  default: [seconds: 90]
                ],
                host: [
@@ -80,7 +61,9 @@ defmodule BGP.Server do
                ],
                keep_alive: [
                  type: :keyword_list,
-                 keys: [seconds: [doc: "Keep Alive timer seconds.", type: :non_neg_integer]],
+                 keys: [
+                   seconds: [doc: "Keep Alive timer seconds.", type: :non_neg_integer]
+                 ],
                  default: [seconds: 30]
                ],
                notification_without_open: [
@@ -101,11 +84,39 @@ defmodule BGP.Server do
                route_advertisement: [
                  type: :keyword_list,
                  keys: [
-                   seconds: [doc: "Route Advertisement timer seconds.", type: :non_neg_integer]
+                   seconds: [
+                     doc: "Route Advertisement timer seconds.",
+                     type: :non_neg_integer
+                   ]
                  ],
                  default: [seconds: 30]
                ]
 
+  @server_schema asn: [
+                   doc: "Server Autonomous System Number.",
+                   type: :pos_integer,
+                   required: true
+                 ],
+                 bgp_id: [
+                   doc: "Server BGP ID, IP address as string.",
+                   type: {:custom, IP.Address, :from_string, []},
+                   required: true
+                 ],
+                 networks: [
+                   doc: "Server AS Networks to announce to peers",
+                   type: {:list, {:custom, IP.Prefix, :from_string, []}},
+                   default: []
+                 ],
+                 port: [
+                   doc: "Port the server listens on.",
+                   type: :integer,
+                   default: 179
+                 ],
+                 peers: [
+                   doc: "List of peer configurations (`t:peer_options/0`).",
+                   type: {:list, {:keyword_list, @peer_schema}},
+                   default: []
+                 ]
   @typedoc """
   Server options
 
@@ -119,6 +130,7 @@ defmodule BGP.Server do
   #{NimbleOptions.docs(@peer_schema)}
   """
   @type peer_options :: keyword()
+
   defmacro __using__(otp_app: otp_app) when is_atom(otp_app) do
     quote do
       @__otp_app__ unquote(otp_app)
@@ -149,6 +161,10 @@ defmodule BGP.Server do
         |> Application.get_env(server, [])
         |> NimbleOptions.validate!(@server_schema)
         |> Keyword.put(:server, server)
+        |> Keyword.update!(
+          :peers,
+          &Enum.map(&1, fn peer -> Keyword.put(peer, :server, server) end)
+        )
 
       :ok = :persistent_term.put(server, config)
       config
@@ -163,31 +179,13 @@ defmodule BGP.Server do
     |> get_config()
     |> Keyword.get(:peers, [])
     |> Enum.find_value({:error, :not_found}, fn peer ->
-      options =
-        peer
-        |> NimbleOptions.validate!(@peer_schema)
-        |> Keyword.put(:server, server)
-
-      if host == options[:host] do
-        {:ok, options}
-      else
-        nil
-      end
+      if host == peer[:host], do: {:ok, peer}
     end)
   end
 
   @impl Supervisor
   def init(args) do
     server = args[:server]
-
-    peers =
-      Enum.map(
-        args[:peers],
-        &{BGP.Server.Session,
-         &1
-         |> NimbleOptions.validate!(@peer_schema)
-         |> Keyword.put(:server, server)}
-      )
 
     Supervisor.init(
       [
@@ -198,7 +196,7 @@ defmodule BGP.Server do
           ThousandIsland,
           port: args[:port], handler_module: BGP.Server.Listener, handler_options: server
         }
-        | peers
+        | Enum.map(args[:peers], &{BGP.Server.Session, &1})
       ],
       strategy: :one_for_all
     )
