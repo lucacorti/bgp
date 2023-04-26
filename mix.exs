@@ -5,7 +5,7 @@ defmodule BGP.MixProject do
     [
       app: :bgp,
       version: "0.1.0",
-      elixir: "~> 1.10",
+      elixir: "~> 1.11",
       start_permanent: Mix.env() == :prod,
       deps: deps(),
       dialyzer: dialyzer()
@@ -26,7 +26,7 @@ defmodule BGP.MixProject do
       {:connection, "~> 1.0"},
       {:ip, "~> 2.0"},
       {:nimble_options, "~> 1.0"},
-      {:thousand_island, "~> 0.5"},
+      {:thousand_island, "~> 1.0-pre"},
       {:credo, "~> 1.0", only: :dev, runtime: false},
       {:dialyxir, "~> 1.0", only: :dev, runtime: false},
       {:ex_doc, "~> 0.26", only: :dev, runtime: false}
