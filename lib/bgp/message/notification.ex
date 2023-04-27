@@ -1,5 +1,5 @@
 defmodule BGP.Message.NOTIFICATION do
-  @moduledoc false
+  @moduledoc Module.split(__MODULE__) |> Enum.map_join(" ", &String.capitalize/1)
 
   errors = [
     {

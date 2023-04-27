@@ -1,5 +1,5 @@
 defmodule BGP.Message.UPDATE do
-  @moduledoc false
+  @moduledoc Module.split(__MODULE__) |> Enum.map_join(" ", &String.capitalize/1)
 
   alias BGP.Message
   alias BGP.Message.{Encoder, NOTIFICATION, UPDATE.Attribute}

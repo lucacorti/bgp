@@ -1,5 +1,5 @@
 defmodule BGP.FSM.Timer do
-  @moduledoc false
+  @moduledoc "BGP Finite State Machine Timer"
 
   @type name :: atom()
   @type seconds :: non_neg_integer()

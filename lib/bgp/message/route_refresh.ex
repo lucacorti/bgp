@@ -1,5 +1,5 @@
 defmodule BGP.Message.ROUTEREFRESH do
-  @moduledoc false
+  @moduledoc Module.split(__MODULE__) |> Enum.map_join(" ", &String.capitalize/1)
 
   alias BGP.Message.{AFN, Encoder, NOTIFICATION}
 

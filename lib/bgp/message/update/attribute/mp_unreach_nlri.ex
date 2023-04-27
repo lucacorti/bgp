@@ -1,5 +1,5 @@
 defmodule BGP.Message.UPDATE.Attribute.MpUnreachNLRI do
-  @moduledoc false
+  @moduledoc Module.split(__MODULE__) |> Enum.map_join(" ", &String.capitalize/1)
 
   alias BGP.Message
   alias BGP.Message.{AFN, NOTIFICATION}

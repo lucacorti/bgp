@@ -1,5 +1,5 @@
 defmodule BGP.Message.OPEN do
-  @moduledoc false
+  @moduledoc Module.split(__MODULE__) |> Enum.map_join(" ", &String.capitalize/1)
 
   alias BGP.Message.OPEN.Capabilities
   alias BGP.{FSM, Message.Encoder}

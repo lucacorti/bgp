@@ -1,5 +1,5 @@
 defmodule BGP.Message do
-  @moduledoc false
+  @moduledoc "BGP Message"
 
   alias BGP.FSM
   alias BGP.Message.{KEEPALIVE, NOTIFICATION, OPEN, ROUTEREFRESH, UPDATE}

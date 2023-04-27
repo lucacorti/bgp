@@ -8,7 +8,8 @@ defmodule BGP.MixProject do
       elixir: "~> 1.11",
       start_permanent: Mix.env() == :prod,
       deps: deps(),
-      dialyzer: dialyzer()
+      dialyzer: dialyzer(),
+      docs: docs()
     ]
   end
 
@@ -35,5 +36,18 @@ defmodule BGP.MixProject do
 
   defp dialyzer do
     [plt_add_apps: [:mix]]
+  end
+
+  defp docs() do
+    [
+      name: "BGP",
+      groups_for_modules: [
+        "Message Types": [~r/^BGP\.Message\.(KEEPALIVE|NOTIFICATION|OPEN|ROUTEREFRESH|UPDATE)$/],
+        "OPEN Capabilities": [~r/^BGP\.Message\.OPEN\.Capabilities.*/],
+        "UPDATE Attributes": [~r/^BGP\.Message\.UPDATE\.Attribute.*/],
+        Message: [~r/^BGP\.Message$/, ~r/^BGP\.Message\.[A-Za-z]+$/],
+        "Finite State Machine": [~r/^BGP\.FSM.*$/]
+      ]
+    ]
   end
 end

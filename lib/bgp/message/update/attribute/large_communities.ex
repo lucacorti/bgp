@@ -1,5 +1,5 @@
 defmodule BGP.Message.UPDATE.Attribute.LargeCommunities do
-  @moduledoc false
+  @moduledoc Module.split(__MODULE__) |> Enum.map_join(" ", &String.capitalize/1)
 
   @type large_community :: {BGP.asn(), pos_integer(), pos_integer()}
   @type t :: %__MODULE__{large_communities: [large_community()]}

@@ -1,7 +1,5 @@
 defmodule BGP.Server.Session do
-  @moduledoc """
-  BGP Session
-  """
+  @moduledoc false
 
   use Connection
 

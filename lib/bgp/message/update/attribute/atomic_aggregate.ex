@@ -1,5 +1,5 @@
 defmodule BGP.Message.UPDATE.Attribute.AtomicAggregate do
-  @moduledoc false
+  @moduledoc Module.split(__MODULE__) |> Enum.map_join(" ", &String.capitalize/1)
 
   @type t :: %__MODULE__{}
   defstruct []

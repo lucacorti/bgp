@@ -1,5 +1,5 @@
 defmodule BGP.FSM do
-  @moduledoc false
+  @moduledoc "BGP Finite State Machine"
 
   alias BGP.{FSM.Timer, Message, Server}
   alias BGP.Message.{KEEPALIVE, NOTIFICATION, OPEN, UPDATE}
