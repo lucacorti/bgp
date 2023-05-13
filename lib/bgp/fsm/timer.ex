@@ -26,8 +26,8 @@ defmodule BGP.FSM.Timer do
   def stop({nil, _seconds} = timer), do: timer
 
   def stop({ref, seconds}) do
-    with :ok <- Process.cancel_timer(ref, info: false),
-         do: {nil, seconds}
+    Process.cancel_timer(ref, info: false)
+    {nil, seconds}
   end
 
   @spec seconds(t) :: seconds()
