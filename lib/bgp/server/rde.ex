@@ -1,5 +1,12 @@
 defmodule BGP.Server.RDE do
-  @moduledoc false
+  @moduledoc """
+  RDE implementation based on RFC4271 section 9 (https://www.rfc-editor.org/rfc/rfc4271#section-9):
+
+    * performs preference calculation for received routes.
+    * performs route selection and maintains Adj-RIB-In, Loc-Rib, Adjs-RIB-Out in ETS.
+    * performs route dissemination to peers after processing updates.
+
+  """
 
   alias BGP.{Message.UPDATE, Server}
 
