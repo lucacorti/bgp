@@ -73,6 +73,14 @@ defmodule BGP.Message do
     end)
   end
 
+  @spec decode_address(binary()) :: {:ok, IP.Address.t()} | {:error, binary}
+  def decode_address(address_data) do
+    case IP.Address.from_binary(address_data) do
+      {:ok, address} -> {:ok, address}
+      {:error, _reason} -> {:error, address_data}
+    end
+  end
+
   @spec decode_prefixes(binary()) :: {:ok, [IP.Prefix.t()]} | {:error, binary()}
   def decode_prefixes(data), do: decode_prefixes(data, [])
 
@@ -103,14 +111,6 @@ defmodule BGP.Message do
 
     with {:ok, prefix} <- decode_prefix(length, prefix_data),
          do: decode_prefixes(rest, [prefix | prefixes])
-  end
-
-  @spec decode_address(binary()) :: {:ok, IP.Address.t()} | {:error, binary}
-  def decode_address(address_data) do
-    case IP.Address.from_binary(address_data) do
-      {:ok, address} -> {:ok, address}
-      {:error, _reason} -> {:error, address_data}
-    end
   end
 
   @spec decode_prefix(pos_integer(), binary()) :: {:ok, IP.Prefix.t()} | {:error, binary()}
