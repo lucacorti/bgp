@@ -126,10 +126,10 @@ defmodule BGP.Message do
 
   @spec encode_address(IP.Address.t()) :: {binary(), pos_integer()}
   def encode_address(%IP.Address{version: 4} = address),
-    do: {<<IP.Address.to_integer(address)::unsigned-size(32)>>, 32}
+    do: {<<IP.Address.to_integer(address)::size(32)>>, 32}
 
   def encode_address(%IP.Address{version: 6} = address),
-    do: {<<IP.Address.to_integer(address)::unsigned-size(128)>>, 128}
+    do: {<<IP.Address.to_integer(address)::size(128)>>, 128}
 
   @spec encode_prefixes([IP.Prefix.t()]) :: {iodata(), pos_integer()}
   def encode_prefixes(prefixes) do
@@ -147,7 +147,7 @@ defmodule BGP.Message do
     padding = if rem(length, 8) > 0, do: 8 - rem(length, 8), else: 0
 
     {
-      [<<length::8>>, <<encoded::binary-unit(1)-size(length), 0::unsigned-size(padding)>>],
+      [<<length::8>>, <<encoded::binary-unit(1)-size(length), 0::size(padding)>>],
       1 + div(length + padding, 8)
     }
   end
