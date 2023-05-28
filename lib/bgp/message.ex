@@ -124,6 +124,13 @@ defmodule BGP.Message do
          do: {:ok, IP.Prefix.new(address, length)}
   end
 
+  @spec encode_address(IP.Address.t()) :: {binary(), pos_integer()}
+  def encode_address(%IP.Address{version: 4} = address),
+    do: {<<IP.Address.to_integer(address)::32>>, 32}
+
+  def encode_address(%IP.Address{version: 6} = address),
+    do: {<<IP.Address.to_integer(address)::128>>, 128}
+
   @spec encode_prefixes([IP.Prefix.t()]) :: {iodata(), pos_integer()}
   def encode_prefixes(prefixes) do
     Enum.map_reduce(prefixes, 0, fn prefix, length ->
@@ -135,8 +142,7 @@ defmodule BGP.Message do
   @spec encode_prefix(IP.Prefix.t()) :: {iodata(), pos_integer()}
   def encode_prefix(prefix) do
     address = IP.Prefix.first(prefix)
-    integer = IP.Address.to_integer(address)
-    encoded = <<integer::unit(32)-size(1)>>
+    {encoded, _size} = encode_address(address)
     length = IP.Prefix.length(prefix)
     padding = if rem(length, 8) > 0, do: 8 - rem(length, 8), else: 0
 

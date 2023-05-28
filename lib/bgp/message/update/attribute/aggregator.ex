@@ -43,11 +43,7 @@ defmodule BGP.Message.UPDATE.Attribute.Aggregator do
   @impl Encoder
   def encode(%__MODULE__{asn: asn, address: address}, %FSM{} = fsm) do
     asn_length = if fsm.four_octets, do: 32, else: 16
-
-    {
-      [<<asn::size(asn_length)>>, <<IP.Address.to_integer(address)::32>>],
-      div(asn_length, 8) + 4,
-      fsm
-    }
+    {address, _size} = Message.encode_address(address)
+    {[<<asn::size(asn_length)>>, address], div(asn_length, 8) + 4, fsm}
   end
 end

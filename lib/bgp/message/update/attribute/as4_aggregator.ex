@@ -30,10 +30,7 @@ defmodule BGP.Message.UPDATE.Attribute.AS4Aggregator do
 
   @impl Encoder
   def encode(%__MODULE__{asn: asn, address: address}, fsm) do
-    {
-      [<<asn::32>>, <<IP.Address.to_integer(address)::32>>],
-      8,
-      fsm
-    }
+    {address, _size} = Message.encode_address(address)
+    {[<<asn::32>>, address], 8, fsm}
   end
 end

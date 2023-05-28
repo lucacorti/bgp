@@ -23,6 +23,7 @@ defmodule BGP.Message.UPDATE.Attribute.OriginatorId do
 
   @impl Encoder
   def encode(%__MODULE__{value: value}, fsm) do
-    {[<<32::8>>, <<IP.Address.to_integer(value)::32>>], 5, fsm}
+    {address, size} = Message.encode_address(value)
+    {[<<size::8>>, address], div(size, 8) + 1, fsm}
   end
 end

@@ -124,13 +124,14 @@ defmodule BGP.Message.OPEN do
         %FSM{extended_optional_parameters: true} = fsm
       ) do
     {data, length, fsm} = encode_capabilities(capabilities, fsm)
+    {bgp_id, _size} = Message.encode_address(msg.bgp_id)
 
     {
       [
         <<4::8>>,
         <<msg.asn::16>>,
         <<msg.hold_time::16>>,
-        <<IP.Address.to_integer(msg.bgp_id)::32>>,
+        bgp_id,
         <<255::8>>,
         <<255::8>>,
         <<length::16>>,
@@ -143,13 +144,14 @@ defmodule BGP.Message.OPEN do
 
   def encode(%__MODULE__{} = msg, fsm) do
     {data, length, fsm} = encode_capabilities(msg, fsm)
+    {bgp_id, _size} = Message.encode_address(msg.bgp_id)
 
     {
       [
         <<4::8>>,
         <<msg.asn::16>>,
         <<msg.hold_time::16>>,
-        <<IP.Address.to_integer(msg.bgp_id)::32>>,
+        bgp_id,
         <<length::8>>,
         data
       ],

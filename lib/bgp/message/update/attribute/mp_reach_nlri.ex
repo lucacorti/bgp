@@ -75,8 +75,7 @@ defmodule BGP.Message.UPDATE.Attribute.MpReachNLRI do
 
   @impl Encoder
   def encode(%__MODULE__{} = message, fsm) do
-    next_hop = IP.Address.to_integer(message.next_hop)
-    next_hop_length = if IP.Address.v4?(message.next_hop), do: 32, else: 128
+    {next_hop, next_hop_length} = Message.encode_address(message.next_hop)
     {nlri, nlri_length} = Message.encode_prefixes(message.nlri)
 
     {
@@ -84,7 +83,7 @@ defmodule BGP.Message.UPDATE.Attribute.MpReachNLRI do
         <<encode_afi(message.afi)::16>>,
         <<encode_safi(message.safi)::8>>,
         <<next_hop_length::8>>,
-        <<next_hop::size(next_hop_length)>>,
+        next_hop,
         <<0::8>>,
         nlri
       ],

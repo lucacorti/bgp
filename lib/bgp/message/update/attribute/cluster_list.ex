@@ -29,7 +29,8 @@ defmodule BGP.Message.UPDATE.Attribute.ClusterList do
   def encode(%__MODULE__{values: values}, fsm) do
     {data, length} =
       Enum.map_reduce(values, 0, fn address, length ->
-        {<<IP.Address.to_integer(address)::unit(32)-size(1)>>, length + 4}
+        {encoded, size} = Message.encode_address(address)
+        {encoded, length + div(size, 8)}
       end)
 
     {data, length, fsm}

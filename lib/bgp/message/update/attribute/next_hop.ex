@@ -23,6 +23,7 @@ defmodule BGP.Message.UPDATE.Attribute.NextHop do
 
   @impl Encoder
   def encode(%__MODULE__{value: value}, fsm) do
-    {<<IP.Address.to_integer(value)::unit(32)-size(1)>>, 4, fsm}
+    {encoded, size} = Message.encode_address(value)
+    {encoded, div(size, 8), fsm}
   end
 end
