@@ -99,7 +99,7 @@ defmodule BGP.Server.Session do
 
   @impl Connection
   def handle_call({:incoming_connection, peer_bgp_id}, _from, %{fsm: fsm} = state) do
-    case Server.check_collision(fsm, peer_bgp_id) do
+    case FSM.check_collision(fsm, peer_bgp_id) do
       :ok ->
         {:reply, :ok, state}
 

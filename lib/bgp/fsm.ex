@@ -103,6 +103,21 @@ defmodule BGP.FSM do
     )
   end
 
+  @spec check_collision(t(), BGP.bgp_id()) ::
+          :ok | {:error, :collision | :close}
+  def check_collision(%__MODULE__{state: :established}, _peer_bgp_id),
+    do: {:error, :collision}
+
+  def check_collision(%__MODULE__{state: state} = fsm, peer_bgp_id)
+      when state in [:open_confirm, :open_sent] and fsm.bgp_id > peer_bgp_id,
+      do: {:error, :collision}
+
+  def check_collision(%__MODULE{state: state}, _peer_bgp_id)
+      when state in [:open_confirm, :open_sent],
+      do: {:error, :close}
+
+  def check_collision(_fsm, _peer_bgp_id), do: :ok
+
   @spec event(t(), event()) :: {:ok, t(), [effect()]}
   def event(%{state: old_state} = fsm, event) do
     with {:ok, fsm, effects} <- process_event(fsm, event) do

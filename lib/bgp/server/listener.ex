@@ -71,7 +71,7 @@ defmodule BGP.Server.Listener do
 
   @impl GenServer
   def handle_call({:outbound_connection, peer_bgp_id}, _from, {socket, %{fsm: fsm} = state}) do
-    case Server.check_collision(fsm, peer_bgp_id) do
+    case FSM.check_collision(fsm, peer_bgp_id) do
       :ok ->
         {:reply, :ok, {socket, state}}
 
