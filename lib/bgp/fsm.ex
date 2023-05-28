@@ -112,7 +112,7 @@ defmodule BGP.FSM do
       when state in [:open_confirm, :open_sent] and fsm.bgp_id > peer_bgp_id,
       do: {:error, :collision}
 
-  def check_collision(%__MODULE{state: state}, _peer_bgp_id)
+  def check_collision(%__MODULE__{state: state}, _peer_bgp_id)
       when state in [:open_confirm, :open_sent],
       do: {:error, :close}
 
