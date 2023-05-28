@@ -117,15 +117,11 @@ defmodule BGP.Message do
   def decode_prefix(length, prefix_data) do
     prefix_length = 32 - length
 
-    case decode_address(
-           <<prefix_data::binary-unit(1)-size(length), 0::unit(1)-size(prefix_length)>>
-         ) do
-      {:ok, address} ->
-        {:ok, IP.Prefix.new(address, length)}
-
-      {:error, _reason} ->
-        {:error, prefix_data}
-    end
+    with {:ok, address} <-
+           decode_address(
+             <<prefix_data::binary-unit(1)-size(length), 0::unit(1)-size(prefix_length)>>
+           ),
+         do: {:ok, IP.Prefix.new(address, length)}
   end
 
   @spec encode_prefixes([IP.Prefix.t()]) :: {iodata(), pos_integer()}

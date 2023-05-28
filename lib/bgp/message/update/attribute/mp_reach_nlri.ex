@@ -28,11 +28,11 @@ defmodule BGP.Message.UPDATE.Attribute.MpReachNLRI do
         {:ok, address} ->
           address
 
-        {:error, prefix_data} ->
+        {:error, data} ->
           raise NOTIFICATION,
             code: :update_message,
             subcode: :invalid_nexthop_attribute,
-            data: prefix_data
+            data: data
       end
 
     nlri_prefixes =
@@ -40,8 +40,8 @@ defmodule BGP.Message.UPDATE.Attribute.MpReachNLRI do
         {:ok, nlri_prefixes} ->
           nlri_prefixes
 
-        {:error, prefix_data} ->
-          raise NOTIFICATION, code: :update_message, data: prefix_data
+        {:error, data} ->
+          raise NOTIFICATION, code: :update_message, data: data
       end
 
     {
