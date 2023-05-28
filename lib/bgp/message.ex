@@ -123,6 +123,7 @@ defmodule BGP.Message do
     end)
   end
 
+  @spec encode_prefix(IP.Prefix.t()) :: {iodata(), pos_integer()}
   def encode_prefix(prefix) do
     address = IP.Prefix.first(prefix)
     integer = IP.Address.to_integer(address)
