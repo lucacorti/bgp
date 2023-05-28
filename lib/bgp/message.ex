@@ -102,13 +102,11 @@ defmodule BGP.Message do
   defp decode_prefixes(
          <<
            length::8,
-           data::binary
+           prefix_data::binary-unit(1)-size(length + 8 - rem(length, 8)),
+           rest::binary
          >>,
          prefixes
        ) do
-    prefix_length = length + 8 - rem(length, 8)
-    <<prefix_data::binary-unit(1)-size(prefix_length), rest::binary>> = data
-
     with {:ok, prefix} <- decode_prefix(length, prefix_data),
          do: decode_prefixes(rest, [prefix | prefixes])
   end
@@ -126,10 +124,10 @@ defmodule BGP.Message do
 
   @spec encode_address(IP.Address.t()) :: {binary(), pos_integer()}
   def encode_address(%IP.Address{version: 4} = address),
-    do: {<<IP.Address.to_integer(address)::size(32)>>, 32}
+    do: {<<IP.Address.to_integer(address)::32>>, 32}
 
   def encode_address(%IP.Address{version: 6} = address),
-    do: {<<IP.Address.to_integer(address)::size(128)>>, 128}
+    do: {<<IP.Address.to_integer(address)::128>>, 128}
 
   @spec encode_prefixes([IP.Prefix.t()]) :: {iodata(), pos_integer()}
   def encode_prefixes(prefixes) do

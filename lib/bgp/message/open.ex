@@ -22,7 +22,7 @@ defmodule BGP.Message.OPEN do
   @impl Encoder
   def decode(
         <<version::8, asn::16, hold_time::16, bgp_id::binary-size(4), _non_ext_params_length::8,
-          255::8, params_length::16, params::binary-size(params_length)>>,
+          255::8, length::16, params::binary-size(length)>>,
         fsm
       ) do
     decode_open(
@@ -36,8 +36,8 @@ defmodule BGP.Message.OPEN do
   end
 
   def decode(
-        <<version::8, asn::16, hold_time::16, bgp_id::binary-size(4), params_length::8,
-          params::binary-size(params_length)>>,
+        <<version::8, asn::16, hold_time::16, bgp_id::binary-size(4), length::8,
+          params::binary-size(length)>>,
         fsm
       ),
       do: decode_open(version, asn, hold_time, bgp_id, params, fsm)
@@ -75,7 +75,7 @@ defmodule BGP.Message.OPEN do
   defp decode_parameters(<<>> = _data, open, fsm), do: {open, fsm}
 
   defp decode_parameters(
-         <<2::8, param_length::16, parameter::binary-size(param_length), rest::binary>>,
+         <<2::8, length::16, parameter::binary-size(length), rest::binary>>,
          msg,
          %FSM{extended_optional_parameters: true} = fsm
        ) do
@@ -84,7 +84,7 @@ defmodule BGP.Message.OPEN do
   end
 
   defp decode_parameters(
-         <<2::8, param_length::8, parameter::binary-size(param_length), rest::binary>>,
+         <<2::8, length::8, parameter::binary-size(length), rest::binary>>,
          msg,
          fsm
        ) do
