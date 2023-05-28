@@ -6,7 +6,7 @@ defmodule BGP.Message.UPDATE do
 
   @type t :: %__MODULE__{
           withdrawn_routes: [IP.Prefix.t()],
-          path_attributes: [Encoder.t()],
+          path_attributes: [Attribute.t()],
           nlri: [IP.Prefix.t()]
         }
   defstruct withdrawn_routes: [], path_attributes: [], nlri: []
