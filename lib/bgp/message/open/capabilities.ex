@@ -150,10 +150,16 @@ defmodule BGP.Message.OPEN.Capabilities do
     do: {[], 0}
 
   defp encode_afi(afi) do
-    with {:ok, afi} <- AFN.encode_afi(afi), do: afi
+    case AFN.encode_afi(afi) do
+      {:ok, afi} -> afi
+      :error -> raise NOTIFICATION, code: :open_message
+    end
   end
 
   defp encode_safi(safi) do
-    with {:ok, safi} <- AFN.encode_safi(safi), do: safi
+    case AFN.encode_safi(safi) do
+      {:ok, safi} -> safi
+      :error -> raise NOTIFICATION, code: :open_message
+    end
   end
 end

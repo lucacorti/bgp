@@ -8,5 +8,5 @@ defmodule BGP.Message.Encoder do
   @type length :: non_neg_integer()
 
   @callback decode(data(), FSM.t()) :: {t(), FSM.t()} | no_return()
-  @callback encode(t(), FSM.t()) :: {data(), length(), FSM.t()}
+  @callback encode(t(), FSM.t()) :: {data(), length(), FSM.t()} | no_return()
 end
