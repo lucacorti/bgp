@@ -124,7 +124,7 @@ defmodule BGP.Message.OPEN do
         %FSM{extended_optional_parameters: true} = fsm
       ) do
     {data, length, fsm} = encode_capabilities(capabilities, fsm)
-    {bgp_id, _size} = Message.encode_address(msg.bgp_id)
+    {bgp_id, 32} = Message.encode_address(msg.bgp_id)
 
     {
       [
@@ -144,7 +144,7 @@ defmodule BGP.Message.OPEN do
 
   def encode(%__MODULE__{} = msg, fsm) do
     {data, length, fsm} = encode_capabilities(msg, fsm)
-    {bgp_id, _size} = Message.encode_address(msg.bgp_id)
+    {bgp_id, 32} = Message.encode_address(msg.bgp_id)
 
     {
       [

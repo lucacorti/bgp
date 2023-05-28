@@ -23,7 +23,7 @@ defmodule BGP.Message.UPDATE.Attribute.NextHop do
 
   @impl Encoder
   def encode(%__MODULE__{value: value}, fsm) do
-    {encoded, size} = Message.encode_address(value)
-    {encoded, div(size, 8), fsm}
+    {encoded, 32} = Message.encode_address(value)
+    {encoded, 4, fsm}
   end
 end

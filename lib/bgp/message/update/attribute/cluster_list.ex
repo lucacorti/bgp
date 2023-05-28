@@ -1,17 +1,17 @@
 defmodule BGP.Message.UPDATE.Attribute.ClusterList do
   @moduledoc Module.split(__MODULE__) |> Enum.map_join(" ", &String.capitalize/1)
 
-  @type t :: %__MODULE__{values: [IP.Address.t()]}
+  @type t :: %__MODULE__{value: [IP.Address.t()]}
 
-  @enforce_keys [:values]
-  defstruct values: nil
+  @enforce_keys [:value]
+  defstruct value: nil
 
   alias BGP.{Message, Message.Encoder, Message.NOTIFICATION}
 
   @behaviour Encoder
 
   @impl Encoder
-  def decode(data, fsm), do: {%__MODULE__{values: decode_cluster_ids(data, [])}, fsm}
+  def decode(data, fsm), do: {%__MODULE__{value: decode_cluster_ids(data, [])}, fsm}
 
   defp decode_cluster_ids(<<>>, cluster_ids), do: Enum.reverse(cluster_ids)
 
@@ -26,11 +26,11 @@ defmodule BGP.Message.UPDATE.Attribute.ClusterList do
   end
 
   @impl Encoder
-  def encode(%__MODULE__{values: values}, fsm) do
+  def encode(%__MODULE__{value: value}, fsm) do
     {data, length} =
-      Enum.map_reduce(values, 0, fn address, length ->
-        {encoded, size} = Message.encode_address(address)
-        {encoded, length + div(size, 8)}
+      Enum.map_reduce(value, 0, fn address, length ->
+        {encoded, 32} = Message.encode_address(address)
+        {encoded, length + 4}
       end)
 
     {data, length, fsm}
