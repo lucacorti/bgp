@@ -18,14 +18,20 @@ defmodule BGP.Message.UPDATE.Attribute.MpUnreachNLRI do
 
   @impl Encoder
   def decode(<<afi::16, safi::8, withdrawn_routes::binary>>, fsm) do
-    {
-      %__MODULE__{
-        afi: decode_afi(afi),
-        safi: decode_safi(safi),
-        withdrawn_routes: Message.decode_prefixes(withdrawn_routes)
-      },
-      fsm
-    }
+    case Message.decode_prefixes(withdrawn_routes) do
+      {:ok, withdrawn_prefixes} ->
+        {
+          %__MODULE__{
+            afi: decode_afi(afi),
+            safi: decode_safi(safi),
+            withdrawn_routes: withdrawn_prefixes
+          },
+          fsm
+        }
+
+      {:error, data} ->
+        raise NOTIFICATION, code: :update_message, data: data
+    end
   end
 
   def decode(_data, _fsm) do

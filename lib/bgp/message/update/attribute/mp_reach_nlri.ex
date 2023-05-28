@@ -23,21 +23,36 @@ defmodule BGP.Message.UPDATE.Attribute.MpReachNLRI do
           nlri::binary>>,
         fsm
       ) do
-    case IP.Address.from_binary(next_hop) do
-      {:ok, address} ->
-        {
-          %__MODULE__{
-            afi: decode_afi(afi),
-            safi: decode_safi(safi),
-            next_hop: address,
-            nlri: Message.decode_prefixes(nlri)
-          },
-          fsm
-        }
+    address =
+      case Message.decode_address(next_hop) do
+        {:ok, address} ->
+          address
 
-      {:error, _reason} ->
-        raise NOTIFICATION, code: :update_message, subcode: :invalid_nexthop_attribute
-    end
+        {:error, prefix_data} ->
+          raise NOTIFICATION,
+            code: :update_message,
+            subcode: :invalid_nexthop_attribute,
+            data: prefix_data
+      end
+
+    nlri_prefixes =
+      case Message.decode_prefixes(nlri) do
+        {:ok, nlri_prefixes} ->
+          nlri_prefixes
+
+        {:error, prefix_data} ->
+          raise NOTIFICATION, code: :update_message, data: prefix_data
+      end
+
+    {
+      %__MODULE__{
+        afi: decode_afi(afi),
+        safi: decode_safi(safi),
+        next_hop: address,
+        nlri: nlri_prefixes
+      },
+      fsm
+    }
   end
 
   def decode(_data, _fsm) do

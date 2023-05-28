@@ -1,9 +1,7 @@
 defmodule BGP.Message.OPEN do
   @moduledoc Module.split(__MODULE__) |> Enum.map_join(" ", &String.capitalize/1)
 
-  alias BGP.Message.OPEN.Capabilities
-  alias BGP.{FSM, Message.Encoder}
-  alias BGP.Message.NOTIFICATION
+  alias BGP.{FSM, Message, Message.Encoder, Message.NOTIFICATION, Message.OPEN.Capabilities}
 
   @asn_min 1
   @asn_max :math.pow(2, 16) - 1
@@ -65,12 +63,12 @@ defmodule BGP.Message.OPEN do
   end
 
   defp decode_bgp_id(bgp_id) do
-    case IP.Address.from_binary(bgp_id) do
-      {:ok, prefix} ->
-        prefix
+    case Message.decode_address(bgp_id) do
+      {:ok, address} ->
+        address
 
-      _error ->
-        raise NOTIFICATION, code: :open_message, subcode: :bad_bgp_identifier
+      {:error, data} ->
+        raise NOTIFICATION, code: :open_message, subcode: :bad_bgp_identifier, data: data
     end
   end
 
@@ -127,14 +125,12 @@ defmodule BGP.Message.OPEN do
       ) do
     {data, length, fsm} = encode_capabilities(capabilities, fsm)
 
-    bgp_id = IP.Address.to_integer(msg.bgp_id)
-
     {
       [
         <<4::8>>,
         <<msg.asn::16>>,
         <<msg.hold_time::16>>,
-        <<bgp_id::32>>,
+        <<IP.Address.to_integer(msg.bgp_id)::32>>,
         <<255::8>>,
         <<255::8>>,
         <<length::16>>,
@@ -148,10 +144,15 @@ defmodule BGP.Message.OPEN do
   def encode(%__MODULE__{} = msg, fsm) do
     {data, length, fsm} = encode_capabilities(msg, fsm)
 
-    bgp_id = IP.Address.to_integer(msg.bgp_id)
-
     {
-      [<<4::8>>, <<msg.asn::16>>, <<msg.hold_time::16>>, <<bgp_id::32>>, <<length::8>>, data],
+      [
+        <<4::8>>,
+        <<msg.asn::16>>,
+        <<msg.hold_time::16>>,
+        <<IP.Address.to_integer(msg.bgp_id)::32>>,
+        <<length::8>>,
+        data
+      ],
       10 + length,
       fsm
     }

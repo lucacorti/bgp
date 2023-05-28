@@ -82,10 +82,13 @@ defmodule BGP.MessageTest do
                fsm
              )
 
-    assert {%UPDATE{withdrawn_routes: ^withdrawn, path_attributes: ^attributes, nlri: ^nlri},
-            _fsm} =
+    assert {%UPDATE{} = update, _fsm} =
              iodata
              |> IO.iodata_to_binary()
              |> BGP.Message.decode(fsm)
+
+    assert update.withdrawn_routes == withdrawn
+    assert update.path_attributes == attributes
+    assert update.nlri == nlri
   end
 end

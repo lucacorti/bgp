@@ -73,21 +73,23 @@ defmodule BGP.Message do
     end)
   end
 
-  @spec decode_prefixes(binary()) :: [IP.Prefix.t()]
+  @spec decode_prefixes(binary()) :: {:ok, [IP.Prefix.t()]} | {:error, binary()}
   def decode_prefixes(data), do: decode_prefixes(data, [])
 
-  defp decode_prefixes(<<>>, prefixes), do: Enum.reverse(prefixes)
+  defp decode_prefixes(<<>>, prefixes), do: {:ok, Enum.reverse(prefixes)}
 
   defp decode_prefixes(
          <<
            length::8,
-           prefix::binary-unit(1)-size(length),
+           prefix_data::binary-unit(1)-size(length),
            rest::binary
          >>,
          prefixes
        )
-       when rem(length, 8) == 0,
-       do: decode_prefixes(rest, [decode_prefix(length, prefix) | prefixes])
+       when rem(length, 8) == 0 do
+    with {:ok, prefix} <- decode_prefix(length, prefix_data),
+         do: decode_prefixes(rest, [prefix | prefixes])
+  end
 
   defp decode_prefixes(
          <<
@@ -97,21 +99,32 @@ defmodule BGP.Message do
          prefixes
        ) do
     prefix_length = length + 8 - rem(length, 8)
-    <<prefix::binary-unit(1)-size(prefix_length), rest::binary>> = data
-    decode_prefixes(rest, [decode_prefix(length, prefix) | prefixes])
+    <<prefix_data::binary-unit(1)-size(prefix_length), rest::binary>> = data
+
+    with {:ok, prefix} <- decode_prefix(length, prefix_data),
+         do: decode_prefixes(rest, [prefix | prefixes])
   end
 
-  defp decode_prefix(length, prefix) do
+  @spec decode_address(binary()) :: {:ok, IP.Address.t()} | {:error, binary}
+  def decode_address(address_data) do
+    case IP.Address.from_binary(address_data) do
+      {:ok, address} -> {:ok, address}
+      {:error, _reason} -> {:error, address_data}
+    end
+  end
+
+  @spec decode_prefix(pos_integer(), binary()) :: {:ok, IP.Prefix.t()} | {:error, binary()}
+  def decode_prefix(length, prefix_data) do
     prefix_length = 32 - length
 
-    case IP.Address.from_binary(
-           <<prefix::binary-unit(1)-size(length), 0::unit(1)-size(prefix_length)>>
+    case decode_address(
+           <<prefix_data::binary-unit(1)-size(length), 0::unit(1)-size(prefix_length)>>
          ) do
       {:ok, address} ->
-        IP.Prefix.new(address, length)
+        {:ok, IP.Prefix.new(address, length)}
 
       {:error, _reason} ->
-        raise NOTIFICATION, code: :update_message, data: prefix
+        {:error, prefix_data}
     end
   end
 

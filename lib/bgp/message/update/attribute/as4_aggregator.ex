@@ -1,7 +1,7 @@
 defmodule BGP.Message.UPDATE.Attribute.AS4Aggregator do
   @moduledoc Module.split(__MODULE__) |> Enum.map_join(" ", &String.capitalize/1)
 
-  alias BGP.Message.{Encoder, NOTIFICATION}
+  alias BGP.{Message, Message.Encoder, Message.NOTIFICATION}
 
   @asn_four_octets_max :math.pow(2, 32) - 1
 
@@ -13,14 +13,14 @@ defmodule BGP.Message.UPDATE.Attribute.AS4Aggregator do
   @behaviour Encoder
 
   @impl Encoder
-  def decode(<<asn::32, prefix::binary-size(4)>>, fsm)
+  def decode(<<asn::32, address::binary-size(4)>>, fsm)
       when asn > 0 and asn < @asn_four_octets_max do
-    case IP.Address.from_binary(prefix) do
+    case Message.decode_address(address) do
       {:ok, address} ->
         {%__MODULE__{asn: asn, address: address}, fsm}
 
-      {:error, _reason} ->
-        raise NOTIFICATION, code: :update_message, subcode: :malformed_attribute_list
+      {:error, data} ->
+        raise NOTIFICATION, code: :update_message, subcode: :malformed_attribute_list, data: data
     end
   end
 
@@ -30,10 +30,8 @@ defmodule BGP.Message.UPDATE.Attribute.AS4Aggregator do
 
   @impl Encoder
   def encode(%__MODULE__{asn: asn, address: address}, fsm) do
-    prefix = IP.Address.to_integer(address)
-
     {
-      [<<asn::32>>, <<prefix::32>>],
+      [<<asn::32>>, <<IP.Address.to_integer(address)::32>>],
       8,
       fsm
     }

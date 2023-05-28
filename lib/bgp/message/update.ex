@@ -33,14 +33,20 @@ defmodule BGP.Message.UPDATE do
              withdrawn_length + attributes_length + @header_size + 4 <= @max_size do
     {attributes, fsm} = decode_attributes(attributes, [], fsm)
 
-    {
-      %__MODULE__{
-        withdrawn_routes: Message.decode_prefixes(withdrawn),
-        path_attributes: attributes,
-        nlri: Message.decode_prefixes(nlri)
-      },
-      fsm
-    }
+    with {:ok, withdrawn_prefixes} <- Message.decode_prefixes(withdrawn),
+         {:ok, nlri_prefixes} <- Message.decode_prefixes(nlri) do
+      {
+        %__MODULE__{
+          withdrawn_routes: withdrawn_prefixes,
+          path_attributes: attributes,
+          nlri: nlri_prefixes
+        },
+        fsm
+      }
+    else
+      {:error, data} ->
+        raise NOTIFICATION, code: :update_message, data: data
+    end
   end
 
   def decode(_data, _fsm) do

@@ -1,8 +1,7 @@
 defmodule BGP.Message.UPDATE.Attribute.Aggregator do
   @moduledoc Module.split(__MODULE__) |> Enum.map_join(" ", &String.capitalize/1)
 
-  alias BGP.FSM
-  alias BGP.Message.{Encoder, NOTIFICATION}
+  alias BGP.{FSM, Message, Message.Encoder, Message.NOTIFICATION}
 
   @asn_max :math.pow(2, 16) - 1
   @asn_four_octets_max :math.pow(2, 32) - 1
@@ -15,25 +14,25 @@ defmodule BGP.Message.UPDATE.Attribute.Aggregator do
   @behaviour Encoder
 
   @impl Encoder
-  def decode(<<asn::32, prefix::binary-size(4)>>, %FSM{four_octets: true} = fsm)
+  def decode(<<asn::32, address::binary-size(4)>>, %FSM{four_octets: true} = fsm)
       when asn > 0 and asn < @asn_four_octets_max do
-    case IP.Address.from_binary(prefix) do
+    case Message.decode_address(address) do
       {:ok, address} ->
         {%__MODULE__{asn: asn, address: address}, fsm}
 
-      {:error, _reason} ->
-        raise NOTIFICATION, code: :update_message, subcode: :malformed_attribute_list
+      {:error, data} ->
+        raise NOTIFICATION, code: :update_message, subcode: :malformed_attribute_list, data: data
     end
   end
 
-  def decode(<<asn::16, prefix::binary-size(2)>>, %FSM{four_octets: false} = fsm)
+  def decode(<<asn::16, prefix::binary-size(4)>>, %FSM{four_octets: false} = fsm)
       when asn > 0 and asn < @asn_max do
-    case IP.Address.from_binary(prefix) do
+    case Message.decode_address(prefix) do
       {:ok, address} ->
         {%__MODULE__{asn: asn, address: address}, fsm}
 
-      {:error, _reason} ->
-        raise NOTIFICATION, code: :update_message, subcode: :malformed_attribute_list
+      {:error, data} ->
+        raise NOTIFICATION, code: :update_message, subcode: :malformed_attribute_list, data: data
     end
   end
 
@@ -42,17 +41,13 @@ defmodule BGP.Message.UPDATE.Attribute.Aggregator do
   end
 
   @impl Encoder
-  def encode(%__MODULE__{asn: asn, address: address}, fsm) do
-    asn_length = asn_length(fsm)
-    prefix = IP.Address.to_integer(address)
+  def encode(%__MODULE__{asn: asn, address: address}, %FSM{} = fsm) do
+    asn_length = if fsm.four_octets, do: 32, else: 16
 
     {
-      [<<asn::size(asn_length)>>, <<prefix::32>>],
+      [<<asn::size(asn_length)>>, <<IP.Address.to_integer(address)::32>>],
       div(asn_length, 8) + 4,
       fsm
     }
   end
-
-  defp asn_length(%FSM{four_octets: true}), do: 32
-  defp asn_length(%FSM{four_octets: false}), do: 16
 end

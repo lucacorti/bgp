@@ -1,25 +1,23 @@
 defmodule BGP.Message.UPDATE.Attribute.NextHop do
   @moduledoc Module.split(__MODULE__) |> Enum.map_join(" ", &String.capitalize/1)
 
-  alias BGP.Message.NOTIFICATION
-
   @type t :: %__MODULE__{value: IP.Address.t()}
 
   @enforce_keys [:value]
   defstruct value: nil
 
-  alias BGP.Message.Encoder
+  alias BGP.{Message, Message.Encoder, Message.NOTIFICATION}
 
   @behaviour Encoder
 
   @impl Encoder
   def decode(address, fsm) do
-    case IP.Address.from_binary(address) do
-      {:ok, prefix} ->
-        {%__MODULE__{value: prefix}, fsm}
+    case Message.decode_address(address) do
+      {:ok, address} ->
+        {%__MODULE__{value: address}, fsm}
 
-      {:error, _reason} ->
-        raise NOTIFICATION, code: :update_message, subcode: :invalid_nexthop_attribute
+      {:error, data} ->
+        raise NOTIFICATION, code: :update_message, subcode: :invalid_nexthop_attribute, data: data
     end
   end
 
