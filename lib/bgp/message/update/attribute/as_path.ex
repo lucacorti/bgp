@@ -23,12 +23,14 @@ defmodule BGP.Message.UPDATE.Attribute.ASPath do
   defp decode_path(<<>>, _fsm, path), do: Enum.reverse(path)
 
   defp decode_path(<<type::8, length::8, data::binary>>, %FSM{four_octets: true} = fsm, path) do
-    <<asns::binary-size(length * 4), rest::binary>> = data
+    asn_size = length * 4
+    <<asns::binary-size(asn_size), rest::binary>> = data
     decode_path(rest, fsm, [{decode_type(type), length, decode_asns(asns, [], fsm)} | path])
   end
 
   defp decode_path(<<type::8, length::8, data::binary>>, fsm, path) do
-    <<asns::binary-size(length * 2), rest::binary>> = data
+    asn_size = length * 2
+    <<asns::binary-size(asn_size), rest::binary>> = data
     decode_path(rest, fsm, [{decode_type(type), length, decode_asns(asns, [], fsm)} | path])
   end
 
