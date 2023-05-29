@@ -86,27 +86,16 @@ defmodule BGP.Message do
 
   defp decode_prefixes(<<>>, prefixes), do: {:ok, Enum.reverse(prefixes)}
 
-  defp decode_prefixes(
-         <<
-           length::8,
-           prefix_data::binary-unit(1)-size(length),
-           rest::binary
-         >>,
-         prefixes
-       )
-       when rem(length, 8) == 0 do
+  defp decode_prefixes(<<length::8, data::binary>>, prefixes) when rem(length, 8) == 0 do
+    <<prefix_data::binary-unit(1)-size(length), rest::binary>> = data
+
     with {:ok, prefix} <- decode_prefix(length, prefix_data),
          do: decode_prefixes(rest, [prefix | prefixes])
   end
 
-  defp decode_prefixes(
-         <<
-           length::8,
-           prefix_data::binary-unit(1)-size(length + 8 - rem(length, 8)),
-           rest::binary
-         >>,
-         prefixes
-       ) do
+  defp decode_prefixes(<<length::8, data::binary>>, prefixes) do
+    <<prefix_data::binary-unit(1)-size(length + 8 - rem(length, 8)), rest::binary>> = data
+
     with {:ok, prefix} <- decode_prefix(length, prefix_data),
          do: decode_prefixes(rest, [prefix | prefixes])
   end
