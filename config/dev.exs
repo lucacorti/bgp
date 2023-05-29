@@ -9,7 +9,7 @@ config :bgp, BGP.MyServer,
   port: 179,
   peers: [
     [
-      asn: 65_001,
+      asn: 64496,
       connect_retry: [seconds: 5],
       bgp_id: "172.16.1.4",
       host: "172.16.1.4"
