@@ -5,6 +5,8 @@ defmodule BGP.Message.OPEN.Capabilities do
   alias BGP.Message.AFN
   alias BGP.Message.{Encoder, NOTIFICATION}
 
+  @asn_four_octets_max floor(:math.pow(2, 32)) - 1
+
   @type t :: %__MODULE__{
           enanched_route_refresh: boolean(),
           extended_message: boolean(),
@@ -66,10 +68,17 @@ defmodule BGP.Message.OPEN.Capabilities do
             | graceful_restart: {restarted == 1, time, decode_afs(afs, [])}
           }, fsm}
 
-  defp decode_capability(65, <<asn::32>>, capabilities, fsm),
-    do:
-      {%__MODULE__{capabilities | four_octets_asn: true},
-       %FSM{fsm | four_octets: true, ibgp: asn == fsm.asn}}
+  defp decode_capability(65, <<asn::32>>, capabilities, fsm) do
+    unless asn >= 1 and asn <= @asn_four_octets_max do
+      raise NOTIFICATION,
+        code: :open_message,
+        subcode: :bad_peer_as,
+        data: <<asn::size(32)>>
+    end
+
+    {%__MODULE__{capabilities | four_octets_asn: true},
+     %FSM{fsm | four_octets: true, ibgp: asn == fsm.asn}}
+  end
 
   defp decode_capability(70, <<>>, capabilities, fsm),
     do: {%__MODULE__{capabilities | enanched_route_refresh: true}, fsm}

@@ -3,9 +3,7 @@ defmodule BGP.Message.OPEN do
 
   alias BGP.{FSM, Message, Message.Encoder, Message.NOTIFICATION, Message.OPEN.Capabilities}
 
-  @asn_min 1
-  @asn_max :math.pow(2, 16) - 1
-  @asn_four_octets_max :math.pow(2, 32) - 1
+  @asn_max floor(:math.pow(2, 16)) - 1
   @hold_time_min 3
 
   @type t :: %__MODULE__{
@@ -39,17 +37,35 @@ defmodule BGP.Message.OPEN do
         <<version::8, asn::16, hold_time::16, bgp_id::binary-size(4), length::8,
           params::binary-size(length)>>,
         fsm
-      ),
-      do: decode_open(version, asn, hold_time, bgp_id, params, fsm)
+      ) do
+    decode_open(version, asn, hold_time, bgp_id, params, fsm)
+  end
 
   def decode(_keepalive, _fsm) do
     raise NOTIFICATION, code: :message_header, subcode: :bad_message_length
   end
 
-  defp decode_open(version, asn, hold_time, bgp_id, params, fsm) do
-    check_asn(asn, fsm)
-    check_hold_time(hold_time)
-    check_version(version)
+  defp decode_open(version, asn, hold_time, bgp_id, params, %FSM{} = fsm) do
+    unless version == 4 do
+      raise NOTIFICATION,
+        code: :open_message,
+        subcode: :unsupported_version_number,
+        data: <<version::8>>
+    end
+
+    unless hold_time == 0 or hold_time >= @hold_time_min do
+      raise NOTIFICATION,
+        code: :open_message,
+        subcode: :unacceptable_hold_time,
+        data: <<hold_time::16>>
+    end
+
+    unless asn >= 1 and asn <= @asn_max do
+      raise NOTIFICATION,
+        code: :open_message,
+        subcode: :bad_peer_as,
+        data: <<asn::size(16)>>
+    end
 
     decode_parameters(
       params,
@@ -90,32 +106,6 @@ defmodule BGP.Message.OPEN do
        ) do
     {capabilities, fsm} = Capabilities.decode(parameter, fsm)
     decode_parameters(rest, %__MODULE__{msg | capabilities: capabilities}, fsm)
-  end
-
-  defp check_asn(asn, %FSM{four_octets: true})
-       when asn >= @asn_min and asn <= @asn_four_octets_max,
-       do: :ok
-
-  defp check_asn(asn, %FSM{four_octets: false}) when asn >= @asn_min and asn <= @asn_max,
-    do: :ok
-
-  defp check_asn(_asn, _fsm) do
-    raise NOTIFICATION, code: :open_message, subcode: :bad_peer_as
-  end
-
-  defp check_hold_time(hold_time) when hold_time == 0 or hold_time >= @hold_time_min, do: :ok
-
-  defp check_hold_time(_hold_time) do
-    raise NOTIFICATION, code: :open_message, subcode: :unacceptable_hold_time
-  end
-
-  defp check_version(4), do: :ok
-
-  defp check_version(version) do
-    raise NOTIFICATION,
-      code: :open_message,
-      subcode: :unsupported_version_number,
-      data: <<version::16>>
   end
 
   @impl Encoder

@@ -9,7 +9,7 @@ defmodule BGP.FSM do
 
   require Logger
 
-  @asn_2octets_max 65_535
+  @asn_2octets_max floor(:math.pow(2, 16)) - 1
   @as_trans 23_456
 
   @type connection_event :: :confirmed | :fails | :request_acked
