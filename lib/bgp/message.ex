@@ -94,7 +94,8 @@ defmodule BGP.Message do
   end
 
   defp decode_prefixes(<<length::8, data::binary>>, prefixes) do
-    <<prefix_data::binary-unit(1)-size(length + 8 - rem(length, 8)), rest::binary>> = data
+    prefix_size = length + 8 - rem(length, 8)
+    <<prefix_data::binary-unit(1)-size(prefix_size), rest::binary>> = data
 
     with {:ok, prefix} <- decode_prefix(length, prefix_data),
          do: decode_prefixes(rest, [prefix | prefixes])
