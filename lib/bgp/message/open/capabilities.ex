@@ -47,8 +47,15 @@ defmodule BGP.Message.OPEN.Capabilities do
     decode_capabilities(rest, capabilities, fsm)
   end
 
-  defp decode_capability(1, <<afi::16, _reserved::8, safi::8>>, capabilities, fsm),
-    do: {%__MODULE__{capabilities | multi_protocol: {decode_afi(afi), decode_safi(safi)}}, fsm}
+  defp decode_capability(1, <<afi::16, _reserved::8, safi::8>>, capabilities, fsm) do
+    with {:ok, afi} <- AFN.decode_afi(afi),
+         {:ok, safi} <- AFN.decode_safi(safi) do
+      {%__MODULE__{capabilities | multi_protocol: {afi, safi}}, fsm}
+    else
+      :error ->
+        raise NOTIFICATION, code: :open_message
+    end
+  end
 
   defp decode_capability(2, <<>>, capabilities, fsm),
     do: {%__MODULE__{capabilities | route_refresh: true}, fsm}
@@ -89,20 +96,13 @@ defmodule BGP.Message.OPEN.Capabilities do
 
   defp decode_afs(<<>>, afs), do: Enum.reverse(afs)
 
-  defp decode_afs(<<afi::16, safi::8, forwarding::1, _reserved::7, rest::binary>>, afs),
-    do: decode_afs(rest, [{decode_afi(afi), decode_safi(safi), forwarding == 1} | afs])
-
-  defp decode_afi(afi) do
-    case AFN.decode_afi(afi) do
-      {:ok, afi} -> afi
-      :error -> raise NOTIFICATION, code: :open_message
-    end
-  end
-
-  defp decode_safi(safi) do
-    case AFN.decode_safi(safi) do
-      {:ok, safi} -> safi
-      :error -> raise NOTIFICATION, code: :open_message
+  defp decode_afs(<<afi::16, safi::8, forwarding::1, _reserved::7, rest::binary>>, afs) do
+    with {:ok, afi} <- AFN.decode_afi(afi),
+         {:ok, safi} <- AFN.decode_safi(safi) do
+      decode_afs(rest, [{afi, safi, forwarding == 1} | afs])
+    else
+      :error ->
+        raise NOTIFICATION, code: :open_message
     end
   end
 
@@ -129,8 +129,14 @@ defmodule BGP.Message.OPEN.Capabilities do
     {data, length, fsm}
   end
 
-  defp encode_multi_protocol(%__MODULE__{multi_protocol: {afi, safi}}, _fsm),
-    do: {[<<1::8>>, <<4::8>>, <<encode_afi(afi)::16>>, <<0::8>>, <<encode_safi(safi)::8>>], 6}
+  defp encode_multi_protocol(%__MODULE__{multi_protocol: {afi, safi}}, _fsm) do
+    with {:ok, afi} <- AFN.encode_afi(afi),
+         {:ok, safi} <- AFN.encode_safi(safi) do
+      {[<<1::8>>, <<4::8>>, <<afi::16>>, <<0::8>>, <<safi::8>>], 6}
+    else
+      :error -> raise NOTIFICATION, code: :open_message
+    end
+  end
 
   defp encode_multi_protocol(%__MODULE__{multi_protocol: nil}, _fsm), do: {[], 0}
 
@@ -142,8 +148,10 @@ defmodule BGP.Message.OPEN.Capabilities do
 
   defp encode_extended_message(%__MODULE__{extended_message: false}, _fsm), do: {[], 0}
 
-  defp encode_graceful_restart(%__MODULE__{graceful_restart: {_restarted, _time, _afns}}, _fsm),
-    do: {[], 0}
+  defp encode_graceful_restart(%__MODULE__{graceful_restart: {restarted, time, afs}}, _fsm) do
+    {afs, length} = encode_afs(afs)
+    {[<<if(restarted, do: 1, else: 0)::1>>, <<0::3>>, <<time::12>>, afs], 2 + length}
+  end
 
   defp encode_graceful_restart(%__MODULE__{graceful_restart: nil}, _fsm), do: {[], 0}
 
@@ -158,17 +166,15 @@ defmodule BGP.Message.OPEN.Capabilities do
   defp encode_enanched_route_refresh(%__MODULE__{enanched_route_refresh: false}, _fsm),
     do: {[], 0}
 
-  defp encode_afi(afi) do
-    case AFN.encode_afi(afi) do
-      {:ok, afi} -> afi
-      :error -> raise NOTIFICATION, code: :open_message
-    end
-  end
-
-  defp encode_safi(safi) do
-    case AFN.encode_safi(safi) do
-      {:ok, safi} -> safi
-      :error -> raise NOTIFICATION, code: :open_message
-    end
+  defp encode_afs(afs) do
+    Enum.map_reduce(afs, 0, fn {afi, safi, forwarding}, length ->
+      with {:ok, afi} <- AFN.encode_afi(afi),
+           {:ok, safi} <- AFN.encode_safi(safi) do
+        {<<afi::16, safi::8, forwarding::1, 0::7>>, length + 4}
+      else
+        :error ->
+          raise NOTIFICATION, code: :open_message
+      end
+    end)
   end
 end

@@ -93,44 +93,58 @@ defmodule BGP.Message.UPDATE.Attribute do
       do: decode_attribute(code, optional, partial, transitive, attribute, data, fsm)
 
   defp decode_attribute(code, optional, partial, transitive, attribute, data, fsm) do
-    module = module_for_type(code)
-    check_flags(module, optional, transitive, partial, data)
+    case module_for_code(code) do
+      {:ok, module} ->
+        check_flags(module, optional, transitive, partial, data)
 
-    {value, fsm} = module.decode(attribute, fsm)
+        {value, fsm} = module.decode(attribute, fsm)
 
-    {
-      %__MODULE__{
-        optional: optional,
-        partial: partial,
-        transitive: transitive,
-        value: value
-      },
-      fsm
-    }
+        {
+          %__MODULE__{
+            optional: optional,
+            partial: partial,
+            transitive: transitive,
+            value: value
+          },
+          fsm
+        }
+
+      :error ->
+        raise NOTIFICATION, code: :update_message, subcode: :malformed_attribute_list, data: code
+    end
   end
 
   @impl Encoder
   def encode(%__MODULE__{value: %module{} = value} = attribute, fsm) do
-    {data, length, fsm} = module.encode(value, fsm)
-    extended = if length > 255, do: 1, else: 0
-    length_size = 8 + 8 * extended
+    case code_for_module(module) do
+      {:ok, type} ->
+        {data, length, fsm} = module.encode(value, fsm)
+        extended = if length > 255, do: 1, else: 0
+        length_size = 8 + 8 * extended
 
-    {
-      [
-        <<
-          optional(attribute)::1,
-          transitive(attribute)::1,
-          partial(attribute)::1,
-          extended::1,
-          0::4
-        >>,
-        <<type_for_module(module)::8>>,
-        <<length::size(length_size)>>,
-        data
-      ],
-      2 + div(length_size, 8) + length,
-      fsm
-    }
+        {
+          [
+            <<
+              optional(attribute)::1,
+              transitive(attribute)::1,
+              partial(attribute)::1,
+              extended::1,
+              0::4
+            >>,
+            <<type::8>>,
+            <<length::size(length_size)>>,
+            data
+          ],
+          2 + div(length_size, 8) + length,
+          fsm
+        }
+
+      :error ->
+        raise NOTIFICATION,
+          code: :update_message,
+          subcode: :malformed_attribute_list,
+          data: module
+    end
   end
 
   for {module, _code, type, _mode} <- attributes do
@@ -195,14 +209,14 @@ defmodule BGP.Message.UPDATE.Attribute do
   end
 
   for({module, code, _type, _mode} <- attributes) do
-    defp type_for_module(unquote(module)), do: unquote(code)
+    defp code_for_module(unquote(module)), do: {:ok, unquote(code)}
   end
+
+  defp code_for_module(_module), do: :error
 
   for {module, code, _type, _mode} <- attributes do
-    defp module_for_type(unquote(code)), do: unquote(module)
+    defp module_for_code(unquote(code)), do: {:ok, unquote(module)}
   end
 
-  defp module_for_type(_code) do
-    raise NOTIFICATION, code: :update_message, subcode: :malformed_attribute_list
-  end
+  defp module_for_code(_code), do: :error
 end

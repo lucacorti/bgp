@@ -20,7 +20,9 @@ defmodule BGP.Message.NOTIFICATION do
         {3, :bad_bgp_identifier},
         {4, :unsupported_optional_parameter},
         {5, :authentication_failure},
-        {6, :unacceptable_hold_time}
+        {6, :unacceptable_hold_time},
+        {7, :unsupported_capability},
+        {11, :role_mismatch}
       ]
     },
     {
@@ -61,7 +63,9 @@ defmodule BGP.Message.NOTIFICATION do
         {5, :connection_rejected},
         {6, :other_configuration_change},
         {7, :connection_collision_resolution},
-        {8, :out_of_resources}
+        {8, :out_of_resources},
+        {9, :hard_reset},
+        {10, :bfd_down}
       ]
     },
     {7, :route_refresh_message, [{1, :invalid_message_length}]}

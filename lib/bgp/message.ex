@@ -12,47 +12,62 @@ defmodule BGP.Message do
   @max_size 4_096
   @extended_max_size 65_535
 
+  messages = [
+    {OPEN, 1},
+    {UPDATE, 2},
+    {NOTIFICATION, 3},
+    {KEEPALIVE, 4},
+    {ROUTEREFRESH, 5}
+  ]
+
   @spec decode(binary(), FSM.t()) :: {t(), FSM.t()} | no_return()
-  def decode(<<header::binary-size(@header_size), msg::binary>>, fsm) do
-    {module, length} = decode_header(header)
-    check_length(module, length, fsm)
-    module.decode(msg, fsm)
+  def decode(<<@marker::@marker_size, length::16, type::8, msg::binary>>, %FSM{} = fsm)
+      when length >= @header_size do
+    case module_for_type(type) do
+      {:ok, module} when module in [KEEPALIVE, OPEN] and length > @max_size ->
+        raise NOTIFICATION,
+          code: :message_header,
+          subcode: :bad_message_length,
+          data: <<length::16>>
+
+      {:ok, _module}
+      when (fsm.extended_message and length > @extended_max_size) or length > @max_size ->
+        raise NOTIFICATION,
+          code: :message_header,
+          subcode: :bad_message_length,
+          data: <<length::16>>
+
+      {:ok, module} ->
+        module.decode(msg, fsm)
+
+      :error ->
+        raise NOTIFICATION, code: :message_header, subcode: :bad_message_type, data: <<type::8>>
+    end
   end
 
-  defp decode_header(<<@marker::@marker_size, length::16, type::8>>)
-       when length >= @header_size do
-    {module_for_type(type), length}
-  end
-
-  defp decode_header(_header) do
+  def decode(_data, _fsm) do
     raise NOTIFICATION, code: :message_header, subcode: :connection_not_synchronized
   end
 
-  defp check_length(module, length, _fsm)
-       when module in [KEEPALIVE, OPEN] and length > @max_size do
-    raise NOTIFICATION, code: :message_header, subcode: :bad_message_length, data: length
-  end
-
-  defp check_length(_module, length, %FSM{} = fsm)
-       when (fsm.extended_message and length > @extended_max_size) or length > @max_size do
-    raise NOTIFICATION, code: :message_header, subcode: :bad_message_length, data: length
-  end
-
-  defp check_length(_module, _length, _fsm), do: :ok
-
   @spec encode(t(), FSM.t()) :: {iodata(), FSM.t()} | no_return()
   def encode(%module{} = message, fsm) do
-    {data, length, fsm} = module.encode(message, fsm)
+    case type_for_module(module) do
+      {:ok, type} ->
+        {data, length, fsm} = module.encode(message, fsm)
 
-    {
-      [
-        <<@marker::@marker_size>>,
-        <<@header_size + length::16>>,
-        <<type_for_module(module)::8>>,
-        data
-      ],
-      fsm
-    }
+        {
+          [
+            <<@marker::@marker_size>>,
+            <<@header_size + length::16>>,
+            <<type::8>>,
+            data
+          ],
+          fsm
+        }
+
+      :error ->
+        raise NOTIFICATION, code: :message_header, subcode: :bad_message_type, data: module
+    end
   end
 
   @spec stream!(iodata()) :: Enumerable.t() | no_return()
@@ -140,23 +155,15 @@ defmodule BGP.Message do
     }
   end
 
-  messages = [
-    {OPEN, 1},
-    {UPDATE, 2},
-    {NOTIFICATION, 3},
-    {KEEPALIVE, 4},
-    {ROUTEREFRESH, 5}
-  ]
+  for {module, type} <- messages do
+    defp type_for_module(unquote(module)), do: {:ok, unquote(type)}
+  end
+
+  defp type_for_module(_module), do: :error
 
   for {module, type} <- messages do
-    defp type_for_module(unquote(module)), do: unquote(type)
+    defp module_for_type(unquote(type)), do: {:ok, unquote(module)}
   end
 
-  for {module, type} <- messages do
-    defp module_for_type(unquote(type)), do: unquote(module)
-  end
-
-  defp module_for_type(type) do
-    raise NOTIFICATION, code: :message_header, subcode: :bad_message_type, data: <<type::8>>
-  end
+  defp module_for_type(_type), do: :error
 end
