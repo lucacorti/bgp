@@ -29,9 +29,9 @@ defmodule BGP.Server.Listener do
   @impl Handler
   def handle_connection(socket, server) do
     state = %{buffer: <<>>, fsm: nil, server: server}
-    %{address: address} = Socket.peer_info(socket)
 
-    with {:ok, host} <- IP.Address.from_tuple(address),
+    with {:ok, {address, _port}} <- Socket.peername(socket),
+         {:ok, host} <- IP.Address.from_tuple(address),
          {:ok, state, peer} <- get_configured_peer(state, server, host),
          {:ok, state} <- trigger_event(state, socket, {:start, :automatic, :passive}),
          {:ok, state} <- trigger_event(state, socket, {:tcp_connection, :confirmed}),
@@ -125,7 +125,7 @@ defmodule BGP.Server.Listener do
   end
 
   defp process_effect(%{server: server} = state, socket, {:recv, %OPEN{} = open}) do
-    %{address: address} = Socket.peer_info(socket)
+    {:ok, {address, _port}} = Socket.peername(socket)
 
     with {:ok, host} <- IP.Address.from_tuple(address),
          {:ok, session} <- Session.session_for(server, host),
