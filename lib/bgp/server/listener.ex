@@ -79,7 +79,7 @@ defmodule BGP.Server.Listener do
         {:reply, error, {socket, state}}
 
       {:error, :close} ->
-        Logger.warn("LISTENER: closing connection to peer due to collision")
+        Logger.warning("LISTENER: closing connection to peer due to collision")
 
         case trigger_event(state, socket, {:error, :open_collision_dump}) do
           {:ok, state} -> {:stop, :normal, :ok, {socket, state}}
@@ -94,7 +94,10 @@ defmodule BGP.Server.Listener do
         {:ok, %{state | fsm: FSM.new(Server.get_config(server), peer)}, peer}
 
       {:error, :not_found} ->
-        Logger.warn("LISTENER: dropping connection, no configured peer for #{inspect(address)}")
+        Logger.warning(
+          "LISTENER: dropping connection, no configured peer for #{inspect(address)}"
+        )
+
         {:close, state}
     end
   end
@@ -105,7 +108,10 @@ defmodule BGP.Server.Listener do
         :ok
 
       {:error, _reason} ->
-        Logger.warn("LISTENER: dropping connection, connection already exists for #{peer[:host]}")
+        Logger.warning(
+          "LISTENER: dropping connection, connection already exists for #{peer[:host]}"
+        )
+
         {:close, state}
     end
   end
@@ -134,7 +140,7 @@ defmodule BGP.Server.Listener do
       {:ok, state}
     else
       {:error, :collision} ->
-        Logger.warn("LISTENER: Connection from peer #{inspect(address)} collides, closing")
+        Logger.warning("LISTENER: Connection from peer #{inspect(address)} collides, closing")
 
         case trigger_event(state, socket, {:error, :open_collision_dump}) do
           {:ok, state} -> {:close, state}
@@ -142,7 +148,7 @@ defmodule BGP.Server.Listener do
         end
 
       {:error, reason} ->
-        Logger.warn(
+        Logger.warning(
           "LISTENER: No configured session for peer #{inspect(address)}, closing (#{reason})"
         )
 

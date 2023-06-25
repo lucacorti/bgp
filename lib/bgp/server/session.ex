@@ -107,7 +107,7 @@ defmodule BGP.Server.Session do
         {:reply, error, state}
 
       {:error, :close} ->
-        Logger.warn("SESSION: closing connection to peer due to collision")
+        Logger.warning("SESSION: closing connection to peer due to collision")
 
         case trigger_event(state, {:error, :open_collision_dump}) do
           {:ok, state} -> {:reply, :ok, state}
@@ -210,7 +210,7 @@ defmodule BGP.Server.Session do
       {:ok, state}
     else
       {:error, :collision} ->
-        Logger.warn("SESSION: Connection to peer collides, closing")
+        Logger.warning("SESSION: Connection to peer collides, closing")
 
         with {:ok, state} <- trigger_event(state, {:error, :open_collision_dump}),
              do: {:close, state}
