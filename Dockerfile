@@ -1,7 +1,8 @@
-FROM elixir:1.14-otp-25-slim
+FROM elixir:1.15-slim
 
 RUN apt update && \
-    apt install -y --no-install-recommends curl ssh git
+    apt install -y --no-install-recommends curl ssh git && \
+    apt clean
 
 RUN mix local.hex --force && mix local.rebar --force
 
