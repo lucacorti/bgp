@@ -13,7 +13,7 @@ defmodule BGP.Server.Session do
 
   require Logger
 
-  @asn_2octets_max 2 ** 16 - 1
+  @asn_2octets_max floor(:math.pow(2, 16)) - 1
   @as_trans 23_456
 
   @type mode :: :active | :passive
