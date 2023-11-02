@@ -1,7 +1,13 @@
 defmodule BGP.Message.OPEN do
   @moduledoc Module.split(__MODULE__) |> Enum.map_join(" ", &String.capitalize/1)
 
-  alias BGP.{FSM, Message, Message.Encoder, Message.NOTIFICATION, Message.OPEN.Capabilities}
+  alias BGP.{
+    Message,
+    Message.Encoder,
+    Message.NOTIFICATION,
+    Message.OPEN.Capabilities,
+    Server.Session
+  }
 
   @asn_max floor(:math.pow(2, 16)) - 1
   @hold_time_min 3
@@ -21,7 +27,7 @@ defmodule BGP.Message.OPEN do
   def decode(
         <<version::8, asn::16, hold_time::16, bgp_id::binary-size(4), _non_ext_params_length::8,
           255::8, length::16, params::binary-size(length)>>,
-        fsm
+        session
       ) do
     decode_open(
       version,
@@ -29,23 +35,23 @@ defmodule BGP.Message.OPEN do
       hold_time,
       bgp_id,
       params,
-      %FSM{fsm | extended_optional_parameters: true}
+      %Session{session | extended_optional_parameters: true}
     )
   end
 
   def decode(
         <<version::8, asn::16, hold_time::16, bgp_id::binary-size(4), length::8,
           params::binary-size(length)>>,
-        fsm
+        session
       ) do
-    decode_open(version, asn, hold_time, bgp_id, params, fsm)
+    decode_open(version, asn, hold_time, bgp_id, params, session)
   end
 
-  def decode(_keepalive, _fsm) do
+  def decode(_keepalive, _session) do
     raise NOTIFICATION, code: :message_header, subcode: :bad_message_length
   end
 
-  defp decode_open(version, asn, hold_time, bgp_id, params, %FSM{} = fsm) do
+  defp decode_open(version, asn, hold_time, bgp_id, params, %Session{} = session) do
     unless version == 4 do
       raise NOTIFICATION,
         code: :open_message,
@@ -74,7 +80,7 @@ defmodule BGP.Message.OPEN do
         bgp_id: decode_bgp_id(bgp_id),
         hold_time: hold_time
       },
-      fsm
+      session
     )
   end
 
@@ -88,32 +94,32 @@ defmodule BGP.Message.OPEN do
     end
   end
 
-  defp decode_parameters(<<>> = _data, open, fsm), do: {open, fsm}
+  defp decode_parameters(<<>> = _data, open, session), do: {open, session}
 
   defp decode_parameters(
          <<2::8, length::16, parameter::binary-size(length), rest::binary>>,
          msg,
-         %FSM{extended_optional_parameters: true} = fsm
+         %Session{extended_optional_parameters: true} = session
        ) do
-    {capabilities, fsm} = Capabilities.decode(parameter, fsm)
-    decode_parameters(rest, %__MODULE__{msg | capabilities: capabilities}, fsm)
+    {capabilities, session} = Capabilities.decode(parameter, session)
+    decode_parameters(rest, %__MODULE__{msg | capabilities: capabilities}, session)
   end
 
   defp decode_parameters(
          <<2::8, length::8, parameter::binary-size(length), rest::binary>>,
          msg,
-         fsm
+         session
        ) do
-    {capabilities, fsm} = Capabilities.decode(parameter, fsm)
-    decode_parameters(rest, %__MODULE__{msg | capabilities: capabilities}, fsm)
+    {capabilities, session} = Capabilities.decode(parameter, session)
+    decode_parameters(rest, %__MODULE__{msg | capabilities: capabilities}, session)
   end
 
   @impl Encoder
   def encode(
         %__MODULE__{capabilities: capabilities} = msg,
-        %FSM{extended_optional_parameters: true} = fsm
+        %Session{extended_optional_parameters: true} = session
       ) do
-    {data, length, fsm} = encode_capabilities(capabilities, fsm)
+    {data, length, session} = encode_capabilities(capabilities, session)
     {bgp_id, 32} = Message.encode_address(msg.bgp_id)
 
     {
@@ -128,12 +134,12 @@ defmodule BGP.Message.OPEN do
         data
       ],
       13 + length,
-      fsm
+      session
     }
   end
 
-  def encode(%__MODULE__{} = msg, fsm) do
-    {data, length, fsm} = encode_capabilities(msg, fsm)
+  def encode(%__MODULE__{} = msg, session) do
+    {data, length, session} = encode_capabilities(msg, session)
     {bgp_id, 32} = Message.encode_address(msg.bgp_id)
 
     {
@@ -146,30 +152,30 @@ defmodule BGP.Message.OPEN do
         data
       ],
       10 + length,
-      fsm
+      session
     }
   end
 
   def encode_capabilities(
         %__MODULE__{capabilities: capabilities},
-        %FSM{extended_optional_parameters: true} = fsm
+        %Session{extended_optional_parameters: true} = session
       ) do
-    {data, length, fsm} = Capabilities.encode(capabilities, fsm)
+    {data, length, session} = Capabilities.encode(capabilities, session)
 
     {
       [<<2::8>>, <<length::16>>, data],
       3 + length,
-      fsm
+      session
     }
   end
 
-  def encode_capabilities(%__MODULE__{capabilities: capabilities}, fsm) do
-    {data, length, fsm} = Capabilities.encode(capabilities, fsm)
+  def encode_capabilities(%__MODULE__{capabilities: capabilities}, session) do
+    {data, length, session} = Capabilities.encode(capabilities, session)
 
     {
       [<<2::8>>, <<length::8>>, data],
       2 + length,
-      fsm
+      session
     }
   end
 end

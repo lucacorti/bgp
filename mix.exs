@@ -16,7 +16,8 @@ defmodule BGP.MixProject do
   # Run "mix help compile.app" to learn about applications.
   def application do
     [
-      extra_applications: [:logger, :ssl],
+      extra_applications:
+        [:logger, :runtime_tools, :ssl] ++ if(Mix.env() == :dev, do: [:observer, :wx], else: []),
       mod: {BGP.Application, []}
     ]
   end

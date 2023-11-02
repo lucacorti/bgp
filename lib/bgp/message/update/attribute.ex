@@ -73,9 +73,9 @@ defmodule BGP.Message.UPDATE.Attribute do
           length::8,
           attribute::binary-size(length)
         >> = data,
-        fsm
+        session
       ),
-      do: decode_attribute(code, optional, partial, transitive, attribute, data, fsm)
+      do: decode_attribute(code, optional, partial, transitive, attribute, data, session)
 
   def decode(
         <<
@@ -88,16 +88,16 @@ defmodule BGP.Message.UPDATE.Attribute do
           length::16,
           attribute::binary-size(length)
         >> = data,
-        fsm
+        session
       ),
-      do: decode_attribute(code, optional, partial, transitive, attribute, data, fsm)
+      do: decode_attribute(code, optional, partial, transitive, attribute, data, session)
 
-  defp decode_attribute(code, optional, partial, transitive, attribute, data, fsm) do
+  defp decode_attribute(code, optional, partial, transitive, attribute, data, session) do
     case module_for_code(code) do
       {:ok, module} ->
         check_flags(module, optional, transitive, partial, data)
 
-        {value, fsm} = module.decode(attribute, fsm)
+        {value, session} = module.decode(attribute, session)
 
         {
           %__MODULE__{
@@ -106,7 +106,7 @@ defmodule BGP.Message.UPDATE.Attribute do
             transitive: transitive,
             value: value
           },
-          fsm
+          session
         }
 
       :error ->
@@ -115,10 +115,10 @@ defmodule BGP.Message.UPDATE.Attribute do
   end
 
   @impl Encoder
-  def encode(%__MODULE__{value: %module{} = value} = attribute, fsm) do
+  def encode(%__MODULE__{value: %module{} = value} = attribute, session) do
     case code_for_module(module) do
       {:ok, type} ->
-        {data, length, fsm} = module.encode(value, fsm)
+        {data, length, session} = module.encode(value, session)
         extended = if length > 255, do: 1, else: 0
         length_size = 8 + 8 * extended
 
@@ -136,7 +136,7 @@ defmodule BGP.Message.UPDATE.Attribute do
             data
           ],
           2 + div(length_size, 8) + length,
-          fsm
+          session
         }
 
       :error ->

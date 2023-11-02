@@ -11,10 +11,10 @@ defmodule BGP.Message.UPDATE.Attribute.OriginatorId do
   @behaviour Encoder
 
   @impl Encoder
-  def decode(address, fsm) do
+  def decode(address, session) do
     case Message.decode_address(address) do
       {:ok, address} ->
-        {%__MODULE__{value: address}, fsm}
+        {%__MODULE__{value: address}, session}
 
       {:error, data} ->
         raise NOTIFICATION, code: :update_message, subcode: :invalid_nexthop_attribute, data: data
@@ -22,8 +22,8 @@ defmodule BGP.Message.UPDATE.Attribute.OriginatorId do
   end
 
   @impl Encoder
-  def encode(%__MODULE__{value: value}, fsm) do
+  def encode(%__MODULE__{value: value}, session) do
     {address, 32} = Message.encode_address(value)
-    {[<<32::8>>, address], 5, fsm}
+    {[<<32::8>>, address], 5, session}
   end
 end

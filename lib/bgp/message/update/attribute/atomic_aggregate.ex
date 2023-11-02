@@ -9,12 +9,12 @@ defmodule BGP.Message.UPDATE.Attribute.AtomicAggregate do
   @behaviour Encoder
 
   @impl Encoder
-  def decode(<<>>, fsm), do: {%__MODULE__{}, fsm}
+  def decode(<<>>, session), do: {%__MODULE__{}, session}
 
-  def decode(data, _fsm) do
+  def decode(data, _session) do
     raise NOTIFICATION, code: :update_message, subcode: :attribute_length_error, data: data
   end
 
   @impl Encoder
-  def encode(%__MODULE__{}, fsm), do: {<<>>, 0, fsm}
+  def encode(%__MODULE__{}, session), do: {<<>>, 0, session}
 end

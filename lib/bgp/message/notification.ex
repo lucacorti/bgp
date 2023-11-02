@@ -45,7 +45,7 @@ defmodule BGP.Message.NOTIFICATION do
     {4, :hold_timer_expired, []},
     {
       5,
-      :fsm,
+      :session,
       [
         {1, :unexpected_message_in_open_sent},
         {2, :unexpected_message_in_open_confirm},
@@ -116,22 +116,22 @@ defmodule BGP.Message.NOTIFICATION do
     do: "#{exception.code} - #{exception.subcode} - #{inspect(exception.data)}"
 
   @impl Encoder
-  def decode(<<code::8, subcode::8, data::binary>>, fsm),
+  def decode(<<code::8, subcode::8, data::binary>>, session),
     do: {
       %__MODULE__{code: decode_code(code), subcode: decode_subcode(code, subcode), data: data},
-      fsm
+      session
     }
 
-  def decode(_notification, _fsm) do
+  def decode(_notification, _session) do
     raise __MODULE__, code: :message_header, subcode: :bad_message_length
   end
 
   @impl Encoder
-  def encode(%__MODULE__{code: code, subcode: subcode, data: data}, fsm) do
+  def encode(%__MODULE__{code: code, subcode: subcode, data: data}, session) do
     {
       [<<encode_code(code)::8>>, <<encode_subcode(code, subcode)::8>>, data],
       2 + IO.iodata_length(data),
-      fsm
+      session
     }
   end
 
