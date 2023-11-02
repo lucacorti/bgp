@@ -9,6 +9,7 @@ defmodule BGP.Server.Session do
   alias BGP.Message.UPDATE.Attribute
   alias BGP.Message.UPDATE.Attribute.{ASPath, NextHop, Origin}
   alias BGP.Server.Session.Timer
+  alias ThousandIsland.Socket
 
   require Logger
 
@@ -34,7 +35,7 @@ defmodule BGP.Server.Session do
           notification_without_open: boolean(),
           port: :inet.port_number(),
           server: Server.t(),
-          socket: :gen_tcp.socket(),
+          socket: :gen_tcp.socket() | Socket.t(),
           start: start(),
           timers: %{atom() => Timer.t()}
         }
@@ -92,6 +93,9 @@ defmodule BGP.Server.Session do
   end
 
   @spec start_link(term()) :: :gen_statem.start_ret()
+  def start_link({args, opts}),
+    do: :gen_statem.start_link(__MODULE__, args, opts)
+
   def start_link(args) do
     :gen_statem.start_link(
       {
@@ -102,7 +106,6 @@ defmodule BGP.Server.Session do
       __MODULE__,
       args,
       []
-      # debug: [:trace]
     )
   end
 
@@ -111,35 +114,18 @@ defmodule BGP.Server.Session do
 
   @impl :gen_statem
   def init(peer) do
+    Process.flag(:trap_exit, true)
     server = Server.get_config(peer[:server])
+    data = setup_peer(server, peer)
 
-    data =
-      struct(__MODULE__,
-        asn: server[:asn],
-        bgp_id: server[:bgp_id],
-        host: peer[:host],
-        mode: peer[:mode],
-        networks: server[:networks],
-        notification_without_open: peer[:notification_without_open],
-        port: peer[:port],
-        server: peer[:server],
-        start: peer[:start],
-        timers:
-          Enum.into(
-            [
-              :as_origination,
-              :connect_retry,
-              :delay_open,
-              :hold_time,
-              :keep_alive,
-              :route_advertisement
-            ],
-            %{},
-            &{&1, Timer.new(get_in(peer, [&1, :seconds]), get_in(peer, [&1, :enabled?]) != false)}
-          )
-      )
+    actions =
+      if data.start == :automatic do
+        [{:next_event, :internal, {:start, data.start, data.mode}}]
+      else
+        []
+      end
 
-    {:ok, :idle, data, [{:next_event, :internal, {:start, data.start, data.mode}}]}
+    {:ok, :idle, data, actions}
   end
 
   @impl :gen_statem
@@ -178,16 +164,30 @@ defmodule BGP.Server.Session do
     }
   end
 
-  def handle_event(:internal, {:send, %msg_type{} = msg}, _state, %__MODULE__{} = data) do
+  def handle_event(:internal, {:send, msg}, _state, %__MODULE__{socket: %Socket{}} = data) do
+    {msg_data, data} = Message.encode(msg, data)
+
+    case Socket.send(data.socket, msg_data) do
+      :ok ->
+        Logger.debug("peer #{data.host}: sending #{inspect(msg)}")
+        :keep_state_and_data
+
+      {:error, _reason} ->
+        Logger.error("Error sending #{inspect(msg)} to peer #{data.host} failed")
+        {:keep_state, [{:next_event, :internal, {:tcp_connection, :fails}}]}
+    end
+  end
+
+  def handle_event(:internal, {:send, msg}, _state, %__MODULE__{} = data) do
     {msg_data, data} = Message.encode(msg, data)
 
     case :gen_tcp.send(data.socket, msg_data) do
       :ok ->
-        Logger.debug("peer #{data.host}: sending #{msg_type}")
+        Logger.debug("peer #{data.host}: sent #{inspect(msg)}")
         :keep_state_and_data
 
       {:error, _reason} ->
-        Logger.error("Error sending #{msg_type} to peer #{data.host} failed")
+        Logger.error("Error sending #{inspect(msg)} to peer #{data.host} failed")
         {:keep_state, [{:next_event, :internal, {:tcp_connection, :fails}}]}
     end
   end
@@ -202,8 +202,8 @@ defmodule BGP.Server.Session do
       (data.buffer <> tcp_data)
       |> Message.stream!()
       |> Enum.map_reduce(data, fn {rest, msg_data}, %__MODULE__{} = data ->
-        {%msg_type{} = msg, data} = Message.decode(msg_data, data)
-        Logger.debug("peer #{data.host}: received #{msg_type}")
+        {msg, data} = Message.decode(msg_data, data)
+        Logger.debug("peer #{data.host}: received #{inspect(msg)}")
         {{:next_event, :internal, {:recv, msg}}, %{data | buffer: rest}}
       end)
 
@@ -221,6 +221,50 @@ defmodule BGP.Server.Session do
       }
   after
     :inet.setopts(socket, active: :once)
+  end
+
+  def handle_event(
+        :info,
+        {:thousand_island_ready, raw_socket, server_config, acceptor_span, start_time},
+        _state,
+        %__MODULE__{} = data
+      ) do
+    case server_config.transport_module.peername(raw_socket) do
+      {:ok, {address, port}} ->
+        connection_span =
+          ThousandIsland.Telemetry.start_child_span(
+            acceptor_span,
+            :connection,
+            %{monotonic_time: start_time},
+            %{remote_address: address, remote_port: port}
+          )
+
+        socket = ThousandIsland.Socket.new(raw_socket, server_config, connection_span)
+        ThousandIsland.Telemetry.span_event(connection_span, :ready)
+
+        with {:ok, socket} <- ThousandIsland.Socket.handshake(socket),
+             {:ok, host} <- IP.Address.from_tuple(address),
+             {:ok, peer} <- Server.get_peer(data.server, host),
+             :ok <- Socket.setopts(socket, mode: :binary, active: :once) do
+          {
+            :next_state,
+            :idle,
+            %__MODULE__{setup_peer(server_config.handler_options, peer) | socket: socket},
+            [
+              {:next_event, :internal, {:start, :automatic, :passive}},
+              {:next_event, :internal, {:tcp_connection, :confirmed}}
+            ]
+          }
+        else
+          {:error, _reason} -> {:stop, :normal}
+        end
+
+      {:error, _reason} ->
+        _ = server_config.transport_module.close(raw_socket)
+        {:stop, :normal}
+    end
+  catch
+    {:stop, _, _} -> {:stop, :normal}
   end
 
   def handle_event(:internal, {:increment_counter, counter}, _state, %__MODULE__{} = data) do
@@ -342,8 +386,6 @@ defmodule BGP.Server.Session do
     }
   end
 
-  def handle_event(_event_type, _event, :idle, _data), do: :keep_state_and_data
-
   def handle_event(_event_type, {:start, _type, _mode}, :connect, _data), do: :keep_state_and_data
 
   def handle_event({:call, from}, {:stop, :manual}, :connect, data) do
@@ -379,7 +421,7 @@ defmodule BGP.Server.Session do
       :open_sent,
       data,
       [
-        {:next_event, :internal, {:set_timer, :hold_time}},
+        {:next_event, :internal, {:set_timer, :hold_time, nil}},
         {:next_event, :internal, {:send, compose_open(data)}}
       ]
     }
@@ -436,6 +478,15 @@ defmodule BGP.Server.Session do
   def handle_event(:internal, {:recv, msg}, :connect, data) do
     delay_open_timer_running = timer_running?(data, :delay_open)
 
+    open_actions = [
+      {:next_event, :internal, {:stop_timer, :connect_retry}},
+      {:next_event, :internal, {:set_timer, :connect_retry, 0}},
+      {:next_event, :internal, {:stop_timer, :delay_open}},
+      {:next_event, :internal, {:set_timer, :delay_open, 0}},
+      {:next_event, :internal, {:send, compose_open(data)}},
+      {:next_event, :internal, {:send, %KEEPALIVE{}}}
+    ]
+
     case msg do
       %OPEN{hold_time: hold_time} when delay_open_timer_running and hold_time > 0 ->
         {
@@ -444,13 +495,8 @@ defmodule BGP.Server.Session do
           data,
           [
             {:next_event, :internal, {:restart_timer, :keep_alive, div(hold_time, 3)}},
-            {:next_event, :internal, {:restart_timer, :hold_time, hold_time}},
-            {:next_event, :internal, {:stop_timer, :connect_retry}},
-            {:next_event, :internal, {:set_timer, :connect_retry, 0}},
-            {:next_event, :internal, {:stop_timer, :delay_open}},
-            {:next_event, :internal, {:set_timer, :delay_open, 0}},
-            {:next_event, :internal, {:send, compose_open(data)}},
-            {:next_event, :internal, {:send, %KEEPALIVE{}}}
+            {:next_event, :internal, {:restart_timer, :hold_time, hold_time}}
+            | open_actions
           ]
         }
 
@@ -461,13 +507,8 @@ defmodule BGP.Server.Session do
           data,
           [
             {:next_event, :internal, {:restart_timer, :keep_alive, nil}},
-            {:next_event, :internal, {:set_timer, :hold_time, nil}},
-            {:next_event, :internal, {:stop_timer, :connect_retry}},
-            {:next_event, :internal, {:set_timer, :connect_retry, 0}},
-            {:next_event, :internal, {:stop_timer, :delay_open}},
-            {:next_event, :internal, {:set_timer, :delay_open, 0}},
-            {:next_event, :internal, {:send, compose_open(data)}},
-            {:next_event, :internal, {:send, %KEEPALIVE{}}}
+            {:next_event, :internal, {:set_timer, :hold_time, nil}}
+            | open_actions
           ]
         }
 
@@ -523,20 +564,36 @@ defmodule BGP.Server.Session do
         :active,
         %__MODULE__{notification_without_open: true} = data
       ) do
-    {
-      :next_state,
-      :idle,
-      data,
-      [
-        {:next_event, :internal, {:stop_timer, :delay_open}},
-        {:next_event, :internal, {:zero_counter, :connect_retry}},
-        {:next_event, :internal, {:stop_timer, :connect_retry}},
-        {:next_event, :internal, {:set_timer, :connect_retry, 0}},
-        {:next_event, :internal, {:send, %NOTIFICATION{code: :cease}}},
-        {:next_event, :internal, {:tcp_connection, :disconnect}},
-        {:reply, from, :ok}
-      ]
-    }
+    if timer_running?(data, :delay_open) do
+      {
+        :next_state,
+        :idle,
+        data,
+        [
+          {:next_event, :internal, {:stop_timer, :delay_open}},
+          {:next_event, :internal, {:zero_counter, :connect_retry}},
+          {:next_event, :internal, {:stop_timer, :connect_retry}},
+          {:next_event, :internal, {:set_timer, :connect_retry, 0}},
+          {:next_event, :internal, {:send, %NOTIFICATION{code: :cease}}},
+          {:next_event, :internal, {:tcp_connection, :disconnect}},
+          {:reply, from, :ok}
+        ]
+      }
+    else
+      {
+        :next_state,
+        :idle,
+        data,
+        [
+          {:next_event, :internal, {:stop_timer, :delay_open}},
+          {:next_event, :internal, {:zero_counter, :connect_retry}},
+          {:next_event, :internal, {:stop_timer, :connect_retry}},
+          {:next_event, :internal, {:set_timer, :connect_retry, 0}},
+          {:next_event, :internal, {:tcp_connection, :disconnect}},
+          {:reply, from, :ok}
+        ]
+      }
+    end
   end
 
   def handle_event({:call, from}, {:stop, :manual}, :active, data) do
@@ -573,7 +630,7 @@ defmodule BGP.Server.Session do
         {:next_event, :internal, {:set_timer, :connect_retry, 0}},
         {:next_event, :internal, {:stop_timer, :delay_open}},
         {:next_event, :internal, {:set_timer, :delay_open, 0}},
-        {:next_event, :internal, {:set_timer, :hold_time}},
+        {:next_event, :internal, {:set_timer, :hold_time, 240}},
         {:next_event, :internal, {:send, compose_open(data)}}
       ]
     }
@@ -621,6 +678,15 @@ defmodule BGP.Server.Session do
   def handle_event(:internal, {:recv, msg}, :active, data) do
     delay_open_timer_running = timer_running?(data, :delay_open)
 
+    open_actions = [
+      {:next_event, :internal, {:stop_timer, :connect_retry}},
+      {:next_event, :internal, {:set_timer, :connect_retry, 0}},
+      {:next_event, :internal, {:stop_timer, :delay_open}},
+      {:next_event, :internal, {:set_timer, :delay_open, 0}},
+      {:next_event, :internal, {:send, compose_open(data)}},
+      {:next_event, :internal, {:send, %KEEPALIVE{}}}
+    ]
+
     case msg do
       %OPEN{hold_time: hold_time} when delay_open_timer_running and hold_time > 0 ->
         {
@@ -629,30 +695,20 @@ defmodule BGP.Server.Session do
           data,
           [
             {:next_event, :internal, {:restart_timer, :keep_alive, div(hold_time, 3)}},
-            {:next_event, :internal, {:restart_timer, :hold_time, hold_time}},
-            {:next_event, :internal, {:stop_timer, :connect_retry}},
-            {:next_event, :internal, {:set_timer, :connect_retry, 0}},
-            {:next_event, :internal, {:stop_timer, :delay_open}},
-            {:next_event, :internal, {:set_timer, :delay_open, 0}},
-            {:next_event, :internal, {:send, compose_open(data)}},
-            {:next_event, :internal, {:send, %KEEPALIVE{}}}
+            {:next_event, :internal, {:restart_timer, :hold_time, hold_time}}
+            | open_actions
           ]
         }
 
-      %OPEN{hold_time: hold_time} when delay_open_timer_running and hold_time > 0 ->
+      %OPEN{} when delay_open_timer_running ->
         {
           :next_state,
           :open_confirm,
           data,
           [
             {:next_event, :internal, {:set_timer, :keep_alive, 0}},
-            {:next_event, :internal, {:set_timer, :hold_time, 0}},
-            {:next_event, :internal, {:stop_timer, :connect_retry}},
-            {:next_event, :internal, {:set_timer, :connect_retry, 0}},
-            {:next_event, :internal, {:stop_timer, :delay_open}},
-            {:next_event, :internal, {:set_timer, :delay_open, 0}},
-            {:next_event, :internal, {:send, compose_open(data)}},
-            {:next_event, :internal, {:send, %KEEPALIVE{}}}
+            {:next_event, :internal, {:set_timer, :hold_time, 0}}
+            | open_actions
           ]
         }
 
@@ -1185,6 +1241,33 @@ defmodule BGP.Server.Session do
         %Attribute{value: %NextHop{value: data.bgp_id}}
       ],
       nlri: data.networks
+    }
+  end
+
+  defp setup_peer(server, peer) do
+    %__MODULE__{
+      asn: server[:asn],
+      bgp_id: server[:bgp_id],
+      host: peer[:host],
+      mode: peer[:mode],
+      networks: server[:networks],
+      notification_without_open: peer[:notification_without_open],
+      port: peer[:port],
+      server: peer[:server],
+      start: peer[:start],
+      timers:
+        Enum.into(
+          [
+            :as_origination,
+            :connect_retry,
+            :delay_open,
+            :hold_time,
+            :keep_alive,
+            :route_advertisement
+          ],
+          %{},
+          &{&1, Timer.new(get_in(peer, [&1, :seconds]), get_in(peer, [&1, :enabled?]) != false)}
+        )
     }
   end
 

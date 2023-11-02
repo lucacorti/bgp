@@ -10,7 +10,6 @@ config :bgp, BGP.MyServer,
   peers: [
     [
       asn: 64496,
-      connect_retry: [seconds: 5],
       bgp_id: "172.16.1.4",
       host: "172.16.1.4"
     ]
