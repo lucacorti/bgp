@@ -1,8 +1,8 @@
 defmodule BGP.Message do
   @moduledoc "BGP Message"
 
-  alias BGP.FSM
   alias BGP.Message.{KEEPALIVE, NOTIFICATION, OPEN, ROUTEREFRESH, UPDATE}
+  alias BGP.Server.Session
 
   @type t :: KEEPALIVE.t() | NOTIFICATION.t() | OPEN.t() | UPDATE.t() | ROUTEREFRESH.t()
 
@@ -20,8 +20,8 @@ defmodule BGP.Message do
     {ROUTEREFRESH, 5}
   ]
 
-  @spec decode(binary(), FSM.t()) :: {t(), FSM.t()} | no_return()
-  def decode(<<@marker::@marker_size, length::16, type::8, msg::binary>>, %FSM{} = fsm)
+  @spec decode(binary(), Session.data()) :: {t(), Session.data()} | no_return()
+  def decode(<<@marker::@marker_size, length::16, type::8, msg::binary>>, %Session{} = session)
       when length >= @header_size do
     case module_for_type(type) do
       {:ok, module} when module in [KEEPALIVE, OPEN] and length > @max_size ->
@@ -31,29 +31,29 @@ defmodule BGP.Message do
           data: <<length::16>>
 
       {:ok, _module}
-      when (fsm.extended_message and length > @extended_max_size) or length > @max_size ->
+      when (session.extended_message and length > @extended_max_size) or length > @max_size ->
         raise NOTIFICATION,
           code: :message_header,
           subcode: :bad_message_length,
           data: <<length::16>>
 
       {:ok, module} ->
-        module.decode(msg, fsm)
+        module.decode(msg, session)
 
       :error ->
         raise NOTIFICATION, code: :message_header, subcode: :bad_message_type, data: <<type::8>>
     end
   end
 
-  def decode(_data, _fsm) do
+  def decode(_data, _session) do
     raise NOTIFICATION, code: :message_header, subcode: :connection_not_synchronized
   end
 
-  @spec encode(t(), FSM.t()) :: {iodata(), FSM.t()} | no_return()
-  def encode(%module{} = message, fsm) do
+  @spec encode(t(), Session.data()) :: {iodata(), Session.data()} | no_return()
+  def encode(%module{} = message, session) do
     case type_for_module(module) do
       {:ok, type} ->
-        {data, length, fsm} = module.encode(message, fsm)
+        {data, length, session} = module.encode(message, session)
 
         {
           [
@@ -62,7 +62,7 @@ defmodule BGP.Message do
             <<type::8>>,
             data
           ],
-          fsm
+          session
         }
 
       :error ->

@@ -21,7 +21,7 @@ defmodule BGP.Message.UPDATE.Attribute.MpReachNLRI do
   def decode(
         <<afi::16, safi::8, length::8, next_hop::binary-unit(1)-size(length), _::8,
           nlri::binary>>,
-        fsm
+        session
       ) do
     address =
       case Message.decode_address(next_hop) do
@@ -51,11 +51,11 @@ defmodule BGP.Message.UPDATE.Attribute.MpReachNLRI do
         next_hop: address,
         nlri: nlri_prefixes
       },
-      fsm
+      session
     }
   end
 
-  def decode(_data, _fsm) do
+  def decode(_data, _session) do
     raise NOTIFICATION, code: :update_message
   end
 
@@ -74,7 +74,7 @@ defmodule BGP.Message.UPDATE.Attribute.MpReachNLRI do
   end
 
   @impl Encoder
-  def encode(%__MODULE__{} = message, fsm) do
+  def encode(%__MODULE__{} = message, session) do
     {next_hop, next_hop_length} = Message.encode_address(message.next_hop)
     {nlri, nlri_length} = Message.encode_prefixes(message.nlri)
 
@@ -88,7 +88,7 @@ defmodule BGP.Message.UPDATE.Attribute.MpReachNLRI do
         nlri
       ],
       4 + div(next_hop_length, 8) + 1 + nlri_length,
-      fsm
+      session
     }
   end
 

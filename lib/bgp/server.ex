@@ -15,11 +15,6 @@ defmodule BGP.Server do
                  ],
                  default: [seconds: 15]
                ],
-               automatic: [
-                 doc: "Automatically start the peering session.",
-                 type: :boolean,
-                 default: true
-               ],
                asn: [
                  doc: "Peer Autonomous System Number.",
                  type: :pos_integer,
@@ -40,10 +35,10 @@ defmodule BGP.Server do
                delay_open: [
                  type: :keyword_list,
                  keys: [
-                   enabled: [doc: "Enable Delay OPEN.", type: :boolean],
+                   enabled?: [doc: "Enable Delay OPEN.", type: :boolean],
                    seconds: [doc: "Delay OPEN timer seconds.", type: :non_neg_integer]
                  ],
-                 default: [enabled: true, seconds: 5]
+                 default: [enabled?: true, seconds: 5]
                ],
                hold_time: [
                  type: :keyword_list,
@@ -88,6 +83,11 @@ defmodule BGP.Server do
                    ]
                  ],
                  default: [seconds: 30]
+               ],
+               start: [
+                 doc: "Type of session startup.",
+                 type: {:in, [:automatic, :manual]},
+                 default: :automatic
                ]
 
   @server_schema asn: [
@@ -187,13 +187,12 @@ defmodule BGP.Server do
 
     Supervisor.init(
       [
-        {Registry, keys: :unique, name: Module.concat(server, Listener.Registry)},
         {Registry, keys: :unique, name: Module.concat(server, Session.Registry)},
-        {BGP.Server.RDE, server: server},
-        {
-          ThousandIsland,
-          port: args[:port], handler_module: BGP.Server.Listener, handler_options: server
-        }
+        {BGP.Server.RDE, server: server}
+        # {
+        #   ThousandIsland,
+        #   port: args[:port], handler_module: BGP.Server.Session, handler_options: server
+        # }
         | Enum.map(args[:peers], &{BGP.Server.Session, &1})
       ],
       strategy: :one_for_all

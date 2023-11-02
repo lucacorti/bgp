@@ -11,7 +11,7 @@ defmodule BGP.Message.UPDATE.Attribute.ClusterList do
   @behaviour Encoder
 
   @impl Encoder
-  def decode(data, fsm), do: {%__MODULE__{value: decode_cluster_ids(data, [])}, fsm}
+  def decode(data, session), do: {%__MODULE__{value: decode_cluster_ids(data, [])}, session}
 
   defp decode_cluster_ids(<<>>, cluster_ids), do: Enum.reverse(cluster_ids)
 
@@ -26,13 +26,13 @@ defmodule BGP.Message.UPDATE.Attribute.ClusterList do
   end
 
   @impl Encoder
-  def encode(%__MODULE__{value: value}, fsm) do
+  def encode(%__MODULE__{value: value}, session) do
     {data, length} =
       Enum.map_reduce(value, 0, fn address, length ->
         {encoded, 32} = Message.encode_address(address)
         {encoded, length + 4}
       end)
 
-    {data, length, fsm}
+    {data, length, session}
   end
 end
