@@ -188,11 +188,11 @@ defmodule BGP.Server do
     Supervisor.init(
       [
         {Registry, keys: :unique, name: Module.concat(server, Session.Registry)},
-        {BGP.Server.RDE, server: server}
-        # {
-        #   ThousandIsland,
-        #   port: args[:port], handler_module: BGP.Server.Session, handler_options: server
-        # }
+        {BGP.Server.RDE, server: server},
+        {
+          ThousandIsland,
+          port: args[:port], handler_module: BGP.Server.Session, handler_options: args
+        }
         | Enum.map(args[:peers], &{BGP.Server.Session, &1})
       ],
       strategy: :one_for_all
