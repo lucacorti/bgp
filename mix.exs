@@ -25,10 +25,9 @@ defmodule BGP.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      {:connection, "~> 1.0"},
       {:ip, "~> 2.0"},
       {:nimble_options, "~> 1.0"},
-      {:thousand_island, "~> 1.0-pre"},
+      {:thousand_island, "~> 1.0"},
       {:credo, "~> 1.0", only: :dev, runtime: false},
       {:dialyxir, "~> 1.0", only: :dev, runtime: false},
       {:ex_doc, "~> 0.26", only: :dev, runtime: false}
