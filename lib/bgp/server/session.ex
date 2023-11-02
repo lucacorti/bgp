@@ -8,7 +8,7 @@ defmodule BGP.Server.Session do
   alias BGP.Message.OPEN.Capabilities
   alias BGP.Message.UPDATE.Attribute
   alias BGP.Message.UPDATE.Attribute.{ASPath, NextHop, Origin}
-  alias BGP.Server.Session.Timer
+  alias BGP.Server.{RDE, Session.Timer}
   alias ThousandIsland.Socket
 
   require Logger
@@ -73,9 +73,9 @@ defmodule BGP.Server.Session do
   @doc false
   def child_spec(opts), do: %{id: __MODULE__, start: {__MODULE__, :start_link, [opts]}}
 
-  @spec incoming_connection(t(), BGP.bgp_id()) :: :ok | {:error, :collision}
-  def incoming_connection(session, peer_bgp_id),
-    do: :gen_statem.call(session, {:incoming_connection, peer_bgp_id})
+  @spec check_collision(t(), BGP.bgp_id()) :: :ok | {:error, :collision}
+  def check_collision(session, peer_bgp_id),
+    do: :gen_statem.call(session, {:check_collision, peer_bgp_id})
 
   @spec manual_start(t()) :: :ok | {:error, :already_started}
   def manual_start(session), do: :gen_statem.call(session, {:start, :manual})
@@ -311,25 +311,48 @@ defmodule BGP.Server.Session do
     }
   end
 
-  def handle_event({:call, from}, {:incoming_connection, _peer_bgp_id}, :established, _data),
+  def handle_event({:call, from}, {:check_collision, _peer_bgp_id}, :established, _data),
     do: {:keep_state_and_data, [{:reply, from, {:error, :collision}}]}
 
   def handle_event(
         {:call, from},
-        {:incoming_connection, peer_bgp_id},
+        {:check_collision, peer_bgp_id},
         state,
         %__MODULE__{} = data
       )
       when state in [:open_confirm, :open_sent] and data.bgp_id > peer_bgp_id,
       do: {:keep_state_and_data, [{:reply, from, {:error, :collision}}]}
 
-  def handle_event({:call, from}, {:incoming_connection, _peer_bgp_id}, state, %__MODULE__{})
+  def handle_event({:call, from}, {:check_collision, _peer_bgp_id}, state, %__MODULE__{})
       when state in [:open_confirm, :open_sent] do
     {:keep_state_and_data, [{:reply, from, :ok}, {:next_event, :internal, :open_collision_dump}]}
   end
 
-  def handle_event({:call, from}, {:incoming_connection, _peer_bgp_id}, _state, _data),
+  def handle_event({:call, from}, {:check_collision, _peer_bgp_id}, _state, _data),
     do: {:keep_state_and_data, [{:reply, from, :ok}]}
+
+  def handle_event(:internal, {:detect_collision, peer_bgp_id}, _state, %__MODULE__{} = data) do
+    with {:ok, session} <- session_for(data.server, data.host),
+         :ok <- check_collision(session, peer_bgp_id) do
+      :keep_state_and_data
+    else
+      {:error, :collision} ->
+        Logger.warning("Connection from peer #{inspect(data.host)} collides, closing")
+        {:keep_state_and_data, [{:next_action, {:error, :open_collision_dump}}]}
+
+      {:error, :not_found} ->
+        case Registry.register(Module.concat(data.server, Session.Registry), data.host, nil) do
+          {:ok, pid} ->
+            Logger.debug("peer #{data.host}: registered session with pid #{pid}")
+
+          {:error, {:already_registered, pid}} ->
+            Logger.warning("peer #{data.host}: session with pid #{pid} already exists")
+            {:error, :already_exists}
+        end
+
+        :keep_state_and_data
+    end
+  end
 
   def handle_event({:call, from}, {:stop, _type}, :idle, _data),
     do: {:keep_state_and_data, [{:reply, from, :ok}]}
@@ -488,14 +511,14 @@ defmodule BGP.Server.Session do
     ]
 
     case msg do
-      %OPEN{hold_time: hold_time} when delay_open_timer_running and hold_time > 0 ->
+      %OPEN{} = open when delay_open_timer_running and open.hold_time > 0 ->
         {
           :next_state,
           :open_confirm,
           data,
           [
-            {:next_event, :internal, {:restart_timer, :keep_alive, div(hold_time, 3)}},
-            {:next_event, :internal, {:restart_timer, :hold_time, hold_time}}
+            {:next_event, :internal, {:restart_timer, :keep_alive, div(open.hold_time, 3)}},
+            {:next_event, :internal, {:restart_timer, :hold_time, open.hold_time}}
             | open_actions
           ]
         }
@@ -828,26 +851,28 @@ defmodule BGP.Server.Session do
 
   def handle_event(:internal, {:recv, msg}, :open_sent, data) do
     case msg do
-      %OPEN{hold_time: hold_time} when hold_time > 0 ->
+      %OPEN{} = open when open.hold_time > 0 ->
         {
           :next_state,
           :open_confirm,
           data,
           [
+            {:next_event, :internal, {:detect_collision, open.bgp_id}},
             {:next_event, :internal, {:set_timer, :delay_open, 0}},
             {:next_event, :internal, {:set_timer, :connect_retry, 0}},
-            {:next_event, :internal, {:restart_timer, :keep_alive, div(hold_time, 3)}},
-            {:next_event, :internal, {:restart_timer, :hold_time, hold_time}},
+            {:next_event, :internal, {:restart_timer, :keep_alive, div(open.hold_time, 3)}},
+            {:next_event, :internal, {:restart_timer, :hold_time, open.hold_time}},
             {:next_event, :internal, {:send, %KEEPALIVE{}}}
           ]
         }
 
-      %OPEN{} ->
+      %OPEN{} = open ->
         {
           :next_state,
           :open_confirm,
           data,
           [
+            {:next_event, :internal, {:detect_collision, open.bgp_id}},
             {:next_event, :internal, {:set_timer, :delay_open, 0}},
             {:next_event, :internal, {:set_timer, :connect_retry, 0}},
             {:next_event, :internal, {:stop_timer, :keep_alive}},
@@ -998,12 +1023,13 @@ defmodule BGP.Server.Session do
           ]
         }
 
-      %OPEN{} ->
+      %OPEN{} = open ->
         {
           :next_state,
           :idle,
           data,
           [
+            {:next_event, :internal, {:detect_collision, open.bgp_id}},
             {:next_event, :internal, {:set_timer, :connect_retry, 0}},
             {:next_event, :internal, {:increment_counter, :connect_retry}},
             {:next_event, :internal, {:send, %NOTIFICATION{code: :cease}}}
@@ -1158,12 +1184,13 @@ defmodule BGP.Server.Session do
     hold_time = timer_seconds(data, :hold_time)
 
     case msg do
-      %OPEN{} ->
+      %OPEN{} = open ->
         {
           :next_state,
           :idle,
           data,
           [
+            {:next_event, :internal, {:detect_collision, open.bgp_id}},
             {:next_event, :internal, {:set_timer, :connect_retry, 0}},
             {:next_event, :internal, {:set_timer, :as_origination, 0}},
             {:next_event, :internal, {:set_timer, :route_advertisement, 0}},
@@ -1194,9 +1221,11 @@ defmodule BGP.Server.Session do
         :keep_state_and_data
 
       %UPDATE{} when hold_time > 0 ->
+        RDE.process_update(data.server, msg)
         {:keep_state_and_data, [{:next_event, :internal, {:restart_timer, :hold_time, nil}}]}
 
       %UPDATE{} ->
+        RDE.process_update(data.server, msg)
         :keep_state_and_data
     end
   end
