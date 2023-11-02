@@ -337,8 +337,8 @@ defmodule BGP.Server.Session do
       :keep_state_and_data
     else
       {:error, :collision} ->
-        Logger.warning("Connection from peer #{inspect(data.host)} collides, closing")
-        {:keep_state_and_data, [{:next_action, {:error, :open_collision_dump}}]}
+        Logger.warning("peer #{data.host}: connection collides with existing session, closing")
+        {:stop, :normal}
 
       {:error, :not_found} ->
         case Registry.register(Module.concat(data.server, Session.Registry), data.host, nil) do
