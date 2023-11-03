@@ -121,6 +121,7 @@ defmodule BGP.Server do
                    type: :atom,
                    default: BGP.Server.Session.Transport.TCP
                  ]
+
   @typedoc """
   Server options
 
