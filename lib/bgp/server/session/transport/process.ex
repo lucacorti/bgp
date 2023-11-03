@@ -10,35 +10,21 @@ defmodule BGP.Server.Session.Transport.Process do
 
   @impl Transport
   def connect(%Session{} = data) do
-    case Registry.lookup(Server.session_registry(data.server), data.host) do
-      [] ->
-        {:error, :not_found}
-
-      [{pid, _value}] ->
-        :gen_statem.call(pid, {:process_connect})
-        {:ok, pid}
+    with {:ok, pid} <- Server.session_for(data.server, data.host),
+         :ok <- :gen_statem.call(pid, {:process_connect}) do
+      {:ok, pid}
     end
   end
 
   @impl Transport
   def disconnect(%Session{} = data) do
-    case Registry.lookup(Server.session_registry(data.server), data.host) do
-      [] ->
-        {:error, :not_found}
-
-      [{pid, _value}] ->
-        :gen_statem.call(pid, {:process_disconnect})
-        {:ok, pid}
-    end
+    with {:ok, pid} <- Server.session_for(data.server, data.host),
+         do: :gen_statem.call(pid, {:process_disconnect})
   end
 
   @impl Transport
   def send(%Session{} = data, msg) do
     {_msg_data, data} = Message.encode(msg, data)
-
-    case :gen_statem.call(data.socket, {:process_recv, msg}) do
-      :ok -> {:ok, data}
-      reason -> {:error, reason}
-    end
+    with :ok <- :gen_statem.call(data.socket, {:process_recv, msg}), do: {:ok, data}
   end
 end

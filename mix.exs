@@ -46,7 +46,7 @@ defmodule BGP.MixProject do
         "OPEN Capabilities": [~r/^BGP\.Message\.OPEN\.Capabilities.*/],
         "UPDATE Attributes": [~r/^BGP\.Message\.UPDATE\.Attribute.*/],
         Message: [~r/^BGP\.Message$/, ~r/^BGP\.Message\.[A-Za-z]+$/],
-        "Finite State Machine": [~r/^BGP\.FSM.*$/]
+        Session: [~r/^BGP\.Server\.Session.*$/]
       ]
     ]
   end
