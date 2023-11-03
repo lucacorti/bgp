@@ -17,7 +17,7 @@ defmodule BGP.MixProject do
   def application do
     [
       extra_applications:
-        [:logger, :runtime_tools, :ssl] ++ if(Mix.env() == :dev, do: [:observer, :wx], else: []),
+        [:logger, :ssl] ++ if(Mix.env() == :dev, do: [:observer, :runtime_tools, :wx], else: []),
       mod: {BGP.Application, []}
     ]
   end
