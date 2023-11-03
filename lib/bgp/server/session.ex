@@ -89,21 +89,8 @@ defmodule BGP.Server.Session do
   def manual_stop(session), do: :gen_statem.call(session, {:stop, :manual})
 
   @spec start_link(term()) :: :gen_statem.start_ret()
-  def start_link({args, opts}),
-    do: :gen_statem.start_link(__MODULE__, args, opts)
-
-  def start_link(args) do
-    :gen_statem.start_link(
-      {
-        :via,
-        Registry,
-        {Server.session_registry(args[:server]), args[:host]}
-      },
-      __MODULE__,
-      args,
-      []
-    )
-  end
+  def start_link({args, opts}), do: :gen_statem.start_link(__MODULE__, args, opts)
+  def start_link(args), do: :gen_statem.start_link(__MODULE__, args, [])
 
   @impl :gen_statem
   def callback_mode, do: [:handle_event_function, :state_enter]
