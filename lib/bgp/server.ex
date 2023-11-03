@@ -1,6 +1,8 @@
 defmodule BGP.Server do
   @moduledoc "BGP Server"
 
+  use Supervisor
+
   @peer_schema as_origination: [
                  type: :keyword_list,
                  keys: [
@@ -134,8 +136,6 @@ defmodule BGP.Server do
   @typedoc "BGP Server"
   @type t :: module()
 
-  use Supervisor
-
   defmacro __using__(otp_app: otp_app) when is_atom(otp_app) do
     quote do
       @__otp_app__ unquote(otp_app)
@@ -148,30 +148,27 @@ defmodule BGP.Server do
   end
 
   @doc false
-  def child_spec([server: server] = opts),
-    do: %{id: server, type: :supervisor, start: {__MODULE__, :start_link, [opts]}}
+  def child_spec(server),
+    do: %{id: server, type: :supervisor, start: {__MODULE__, :start_link, [server]}}
+
+  @spec start_link(t()) :: Supervisor.on_start()
+  def start_link(server),
+    do: Supervisor.start_link(__MODULE__, get_config(server), name: server)
 
   @impl Supervisor
   def init(args) do
-    server = args[:server]
-
     Supervisor.init(
       [
-        {Registry, keys: :unique, name: session_registry(server)},
-        {BGP.Server.RDE, server: server},
+        {Registry, keys: :unique, name: session_registry(args[:server])},
+        {BGP.Server.RDE, server: args[:server]},
+        {BGP.Server.Session.Supervisor, args[:server]},
         {
           ThousandIsland,
           port: args[:port], handler_module: BGP.Server.Session, handler_options: args
         }
-        | Enum.map(args[:peers], &{BGP.Server.Session, &1})
       ],
       strategy: :one_for_all
     )
-  end
-
-  @spec start_link(keyword) :: Supervisor.on_start()
-  def start_link(server: server) do
-    Supervisor.start_link(__MODULE__, get_config(server), name: server)
   end
 
   @spec get_config(t()) :: keyword()
