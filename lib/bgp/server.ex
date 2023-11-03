@@ -3,8 +3,6 @@ defmodule BGP.Server do
 
   use Supervisor
 
-  alias BGP.Session
-
   require Logger
 
   @peer_schema as_origination: [
@@ -210,15 +208,15 @@ defmodule BGP.Server do
   @spec rde_for(t()) :: atom()
   def rde_for(server), do: Module.concat(server, "RDE")
 
-  @spec register_session(Session.t()) :: :ok | {:error, {:already_registered, pid()}}
-  def register_session(data) do
-    case Registry.register(session_registry(data.server), data.host, nil) do
+  @spec register_session(t(), IP.Address.t()) :: :ok | {:error, {:already_registered, pid()}}
+  def register_session(server, host) do
+    case Registry.register(session_registry(server), host, nil) do
       {:ok, pid} ->
-        Logger.info("peer #{data.host}: registered session with pid #{pid}")
+        Logger.info("peer #{host}: registered session with pid #{pid}")
         :ok
 
       {:error, {:already_registered, pid}} = error ->
-        Logger.warning("peer #{data.host}: session with pid #{pid} already registered")
+        Logger.warning("peer #{host}: session with pid #{pid} already registered")
         error
     end
   end
