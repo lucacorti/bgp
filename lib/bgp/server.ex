@@ -1,10 +1,6 @@
 defmodule BGP.Server do
   @moduledoc "BGP Server"
 
-  use Supervisor
-
-  @type t :: module()
-
   @peer_schema as_origination: [
                  type: :keyword_list,
                  keys: [
@@ -114,6 +110,12 @@ defmodule BGP.Server do
                    doc: "List of peer configurations (`t:peer_options/0`).",
                    type: {:list, {:keyword_list, @peer_schema}},
                    default: []
+                 ],
+                 transport: [
+                   doc:
+                     "Server transport. Allows to use a transport different from TCP. Not normally needed.",
+                   type: :atom,
+                   default: BGP.Server.Session.Transport.TCP
                  ]
   @typedoc """
   Server options
@@ -129,6 +131,11 @@ defmodule BGP.Server do
   """
   @type peer_options :: keyword()
 
+  @typedoc "BGP Server"
+  @type t :: module()
+
+  use Supervisor
+
   defmacro __using__(otp_app: otp_app) when is_atom(otp_app) do
     quote do
       @__otp_app__ unquote(otp_app)
@@ -140,8 +147,26 @@ defmodule BGP.Server do
     raise "You must pass a module name to #{__MODULE__} :otp_app option"
   end
 
-  def child_spec([server: server] = opts) do
-    %{id: server, type: :supervisor, start: {__MODULE__, :start_link, [opts]}}
+  @doc false
+  def child_spec([server: server] = opts),
+    do: %{id: server, type: :supervisor, start: {__MODULE__, :start_link, [opts]}}
+
+  @impl Supervisor
+  def init(args) do
+    server = args[:server]
+
+    Supervisor.init(
+      [
+        {Registry, keys: :unique, name: session_registry(server)},
+        {BGP.Server.RDE, server: server},
+        {
+          ThousandIsland,
+          port: args[:port], handler_module: BGP.Server.Session, handler_options: args
+        }
+        | Enum.map(args[:peers], &{BGP.Server.Session, &1})
+      ],
+      strategy: :one_for_all
+    )
   end
 
   @spec start_link(keyword) :: Supervisor.on_start()
@@ -181,21 +206,15 @@ defmodule BGP.Server do
     end)
   end
 
-  @impl Supervisor
-  def init(args) do
-    server = args[:server]
-
-    Supervisor.init(
-      [
-        {Registry, keys: :unique, name: Module.concat(server, Session.Registry)},
-        {BGP.Server.RDE, server: server},
-        {
-          ThousandIsland,
-          port: args[:port], handler_module: BGP.Server.Session, handler_options: args
-        }
-        | Enum.map(args[:peers], &{BGP.Server.Session, &1})
-      ],
-      strategy: :one_for_all
-    )
+  @spec session_for(BGP.Server.t(), IP.Address.t()) ::
+          {:ok, GenServer.server()} | {:error, :not_found}
+  def session_for(server, host) do
+    case Registry.lookup(session_registry(server), host) do
+      [] -> {:error, :not_found}
+      [{pid, _value}] -> {:ok, pid}
+    end
   end
+
+  @spec session_registry(t()) :: module()
+  def session_registry(server), do: Module.concat(server, Session.Registry)
 end

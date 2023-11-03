@@ -8,7 +8,9 @@ defmodule BGP.Server.Session do
   alias BGP.Message.OPEN.Capabilities
   alias BGP.Message.UPDATE.Attribute
   alias BGP.Message.UPDATE.Attribute.{ASPath, NextHop, Origin}
-  alias BGP.Server.{RDE, Session.Timer}
+  alias BGP.Server.RDE
+  alias BGP.Server.Session.{Timer, Transport}
+
   alias ThousandIsland.Socket
 
   require Logger
@@ -35,9 +37,10 @@ defmodule BGP.Server.Session do
           notification_without_open: boolean(),
           port: :inet.port_number(),
           server: Server.t(),
-          socket: :gen_tcp.socket() | Socket.t(),
+          socket: Transport.socket(),
           start: start(),
-          timers: %{atom() => Timer.t()}
+          timers: %{atom() => Timer.t()},
+          transport: Transport.t()
         }
 
   @type t :: :gen_statem.server_ref()
@@ -50,7 +53,8 @@ defmodule BGP.Server.Session do
     :notification_without_open,
     :port,
     :server,
-    :start
+    :start,
+    :transport
   ]
   defstruct asn: nil,
             bgp_id: nil,
@@ -68,7 +72,8 @@ defmodule BGP.Server.Session do
             server: nil,
             socket: nil,
             start: nil,
-            timers: %{}
+            timers: %{},
+            transport: nil
 
   @doc false
   def child_spec(opts), do: %{id: __MODULE__, start: {__MODULE__, :start_link, [opts]}}
@@ -83,15 +88,6 @@ defmodule BGP.Server.Session do
   @spec manual_stop(t()) :: :ok | {:error, :already_stopped}
   def manual_stop(session), do: :gen_statem.call(session, {:stop, :manual})
 
-  @spec session_for(BGP.Server.t(), IP.Address.t()) ::
-          {:ok, GenServer.server()} | {:error, :not_found}
-  def session_for(server, host) do
-    case Registry.lookup(Module.concat(server, Session.Registry), host) do
-      [] -> {:error, :not_found}
-      [{pid, _value}] -> {:ok, pid}
-    end
-  end
-
   @spec start_link(term()) :: :gen_statem.start_ret()
   def start_link({args, opts}),
     do: :gen_statem.start_link(__MODULE__, args, opts)
@@ -101,7 +97,7 @@ defmodule BGP.Server.Session do
       {
         :via,
         Registry,
-        {Module.concat(args[:server], Session.Registry), args[:host]}
+        {Server.session_registry(args[:server]), args[:host]}
       },
       __MODULE__,
       args,
@@ -115,8 +111,7 @@ defmodule BGP.Server.Session do
   @impl :gen_statem
   def init(peer) do
     Process.flag(:trap_exit, true)
-    server = Server.get_config(peer[:server])
-    data = setup_peer(server, peer)
+    data = setup_session(peer)
 
     actions =
       if data.start == :automatic do
@@ -135,11 +130,7 @@ defmodule BGP.Server.Session do
   end
 
   def handle_event(:internal, {:tcp_connection, :connect}, _state, %__MODULE__{} = data) do
-    host =
-      IP.Address.to_string(data.host)
-      |> String.to_charlist()
-
-    case :gen_tcp.connect(host, data.port, mode: :binary, active: :once) do
+    case data.transport.connect(data) do
       {:ok, socket} ->
         {
           :keep_state,
@@ -154,7 +145,7 @@ defmodule BGP.Server.Session do
   end
 
   def handle_event(:internal, {:tcp_connection, :disconnect}, _state, %__MODULE__{} = data) do
-    :ok = :gen_tcp.close(data.socket)
+    :ok = data.transport.close(data)
     Logger.error("Connection to peer #{data.host} closed")
 
     {
@@ -164,37 +155,21 @@ defmodule BGP.Server.Session do
     }
   end
 
-  def handle_event(:internal, {:send, msg}, _state, %__MODULE__{socket: %Socket{}} = data) do
-    {msg_data, data} = Message.encode(msg, data)
-
-    case Socket.send(data.socket, msg_data) do
-      :ok ->
-        Logger.debug("peer #{data.host}: sending #{inspect(msg)}")
-        :keep_state_and_data
-
-      {:error, _reason} ->
-        Logger.error("Error sending #{inspect(msg)} to peer #{data.host} failed")
-        {:keep_state, [{:next_event, :internal, {:tcp_connection, :fails}}]}
-    end
-  end
-
   def handle_event(:internal, {:send, msg}, _state, %__MODULE__{} = data) do
-    {msg_data, data} = Message.encode(msg, data)
-
-    case :gen_tcp.send(data.socket, msg_data) do
-      :ok ->
+    case data.transport.send(data, msg) do
+      {:ok, data} ->
         Logger.debug("peer #{data.host}: sent #{inspect(msg)}")
-        :keep_state_and_data
+        {:keep_state, data}
 
       {:error, _reason} ->
         Logger.error("Error sending #{inspect(msg)} to peer #{data.host} failed")
-        {:keep_state, [{:next_event, :internal, {:tcp_connection, :fails}}]}
+        {:keep_state_and_data, [{:next_event, :internal, {:tcp_connection, :fails}}]}
     end
   end
 
   def handle_event(:info, {:tcp_closed, _port}, _state, %__MODULE__{} = data) do
     Logger.error("Connection closed by peer #{data.host}")
-    {:keep_state_and_data, [{:next_event, :internal, {:tcp_connection, :fails}}]}
+    {:keep_state, %{data | socket: nil}, [{:next_event, :internal, {:tcp_connection, :fails}}]}
   end
 
   def handle_event(:info, {:tcp, socket, tcp_data}, _state, %__MODULE__{} = data) do
@@ -249,7 +224,7 @@ defmodule BGP.Server.Session do
           {
             :next_state,
             :idle,
-            %__MODULE__{setup_peer(server_config.handler_options, peer) | socket: socket},
+            %__MODULE__{setup_session(peer) | socket: socket},
             [
               {:next_event, :internal, {:start, :automatic, :passive}},
               {:next_event, :internal, {:tcp_connection, :confirmed}}
@@ -332,7 +307,7 @@ defmodule BGP.Server.Session do
     do: {:keep_state_and_data, [{:reply, from, :ok}]}
 
   def handle_event(:internal, {:detect_collision, peer_bgp_id}, _state, %__MODULE__{} = data) do
-    with {:ok, session} <- session_for(data.server, data.host),
+    with {:ok, session} <- Server.session_for(data.server, data.host),
          :ok <- check_collision(session, peer_bgp_id) do
       :keep_state_and_data
     else
@@ -341,12 +316,12 @@ defmodule BGP.Server.Session do
         {:stop, :normal}
 
       {:error, :not_found} ->
-        case Registry.register(Module.concat(data.server, Session.Registry), data.host, nil) do
+        case Registry.register(Server.session_registry(data.server), data.host, nil) do
           {:ok, pid} ->
             Logger.debug("peer #{data.host}: registered session with pid #{pid}")
 
           {:error, {:already_registered, pid}} ->
-            Logger.warning("peer #{data.host}: session with pid #{pid} already exists")
+            Logger.warning("peer #{data.host}: session with pid #{pid} already registered")
             {:error, :already_exists}
         end
 
@@ -1273,7 +1248,9 @@ defmodule BGP.Server.Session do
     }
   end
 
-  defp setup_peer(server, peer) do
+  defp setup_session(peer) do
+    server = Server.get_config(peer[:server])
+
     %__MODULE__{
       asn: server[:asn],
       bgp_id: server[:bgp_id],
@@ -1296,7 +1273,8 @@ defmodule BGP.Server.Session do
           ],
           %{},
           &{&1, Timer.new(get_in(peer, [&1, :seconds]), get_in(peer, [&1, :enabled?]) != false)}
-        )
+        ),
+      transport: server[:transport]
     }
   end
 

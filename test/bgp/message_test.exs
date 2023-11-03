@@ -7,6 +7,7 @@ defmodule BGP.MessageTest do
   alias BGP.Message.UPDATE.Attribute
   alias BGP.Message.UPDATE.Attribute.{ASPath, NextHop, Origin}
   alias BGP.Server.Session
+  alias BGP.Server.Session.Transport.TCP
 
   import IP.Sigil
 
@@ -20,7 +21,8 @@ defmodule BGP.MessageTest do
         notification_without_open: true,
         port: 179,
         start: :manual,
-        server: nil
+        server: nil,
+        transport: TCP
       }
     }
   end
