@@ -3,6 +3,10 @@ defmodule BGP.Server do
 
   use Supervisor
 
+  alias BGP.Session
+
+  require Logger
+
   @peer_schema as_origination: [
                  type: :keyword_list,
                  keys: [
@@ -203,8 +207,23 @@ defmodule BGP.Server do
     end)
   end
 
-  @spec session_for(BGP.Server.t(), IP.Address.t()) ::
-          {:ok, GenServer.server()} | {:error, :not_found}
+  @spec rde_for(t()) :: atom()
+  def rde_for(server), do: Module.concat(server, "RDE")
+
+  @spec register_session(Session.t()) :: :ok | {:error, {:already_registered, pid()}}
+  def register_session(data) do
+    case Registry.register(session_registry(data.server), data.host, nil) do
+      {:ok, pid} ->
+        Logger.info("peer #{data.host}: registered session with pid #{pid}")
+        :ok
+
+      {:error, {:already_registered, pid}} = error ->
+        Logger.warning("peer #{data.host}: session with pid #{pid} already registered")
+        error
+    end
+  end
+
+  @spec session_for(t(), IP.Address.t()) :: {:ok, pid()} | {:error, :not_found}
   def session_for(server, host) do
     case Registry.lookup(session_registry(server), host) do
       [] -> {:error, :not_found}
@@ -213,5 +232,9 @@ defmodule BGP.Server do
   end
 
   @spec session_registry(t()) :: module()
-  def session_registry(server), do: Module.concat(server, Session.Registry)
+  def session_registry(server), do: Module.concat(server, "Session.Registry")
+
+  @spec session_via(t(), IP.Address.t()) :: {:via, module(), term()}
+  def session_via(server, hostname),
+    do: {:via, Registry, {session_registry(server), hostname}} |> IO.inspect()
 end

@@ -90,7 +90,10 @@ defmodule BGP.Server.Session do
 
   @spec start_link(term()) :: :gen_statem.start_ret()
   def start_link({args, opts}), do: :gen_statem.start_link(__MODULE__, args, opts)
-  def start_link(args), do: :gen_statem.start_link(__MODULE__, args, [])
+
+  def start_link(args) do
+    :gen_statem.start_link(Server.session_via(args[:server], args[:host]), __MODULE__, args, [])
+  end
 
   @impl :gen_statem
   def callback_mode, do: [:handle_event_function, :state_enter]
@@ -303,15 +306,7 @@ defmodule BGP.Server.Session do
         {:stop, :normal}
 
       {:error, :not_found} ->
-        case Registry.register(Server.session_registry(data.server), data.host, nil) do
-          {:ok, pid} ->
-            Logger.debug("peer #{data.host}: registered session with pid #{pid}")
-
-          {:error, {:already_registered, pid}} ->
-            Logger.warning("peer #{data.host}: session with pid #{pid} already registered")
-            {:error, :already_exists}
-        end
-
+        Server.register_session(data)
         :keep_state_and_data
     end
   end
