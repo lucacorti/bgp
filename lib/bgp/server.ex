@@ -235,6 +235,5 @@ defmodule BGP.Server do
   def session_registry(server), do: Module.concat(server, "Session.Registry")
 
   @spec session_via(t(), IP.Address.t()) :: {:via, module(), term()}
-  def session_via(server, hostname),
-    do: {:via, Registry, {session_registry(server), hostname}} |> IO.inspect()
+  def session_via(server, hostname), do: {:via, Registry, {session_registry(server), hostname}}
 end
