@@ -7,11 +7,11 @@ defmodule BGP.Server.RDE do
 
   @spec start_link(Keyword.t()) :: GenServer.on_start()
   def start_link(args),
-    do: GenServer.start_link(__MODULE__, args, name: Module.concat(args[:server], RDE))
+    do: GenServer.start_link(__MODULE__, args, name: Server.rde_for(args[:server]))
 
   @spec process_update(Server.t(), UPDATE.t()) :: :ok
   def process_update(server, update),
-    do: GenServer.call(Module.concat(server, RDE), {:process_update, update})
+    do: GenServer.call(Server.rde_for(server), {:process_update, update})
 
   @impl GenServer
   def init(_args) do

@@ -10,8 +10,9 @@ defmodule BGP.Server.Session.Supervisor do
     do: %{id: server, type: :supervisor, start: {__MODULE__, :start_link, [server]}}
 
   @spec start_link(Server.t()) :: Supervisor.on_start()
-  def start_link(server),
-    do: Supervisor.start_link(__MODULE__, server, name: Module.concat(server, Session.Supervisor))
+  def start_link(server) do
+    Supervisor.start_link(__MODULE__, server, name: Module.concat(server, "Session.Supervisor"))
+  end
 
   @impl Supervisor
   def init(server) do
