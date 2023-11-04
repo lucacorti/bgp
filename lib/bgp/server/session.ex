@@ -15,9 +15,6 @@ defmodule BGP.Server.Session do
 
   require Logger
 
-  @asn_2octets_max floor(:math.pow(2, 16)) - 1
-  @as_trans 23_456
-
   @type mode :: :active | :passive
   @type start :: :manual | :automatic
   @type state :: :idle | :active | :open_sent | :open_confirm | :established
@@ -1205,7 +1202,7 @@ defmodule BGP.Server.Session do
 
   defp compose_open(%__MODULE__{} = data) do
     %OPEN{
-      asn: compose_open_asn(data),
+      asn: data.asn,
       bgp_id: data.bgp_id,
       hold_time: timer_seconds(data, :hold_time),
       capabilities: %Capabilities{
@@ -1215,9 +1212,6 @@ defmodule BGP.Server.Session do
       }
     }
   end
-
-  defp compose_open_asn(%__MODULE__{asn: asn}) when asn < @asn_2octets_max, do: asn
-  defp compose_open_asn(_data), do: @as_trans
 
   defp compose_as_update(%__MODULE__{} = data) do
     %UPDATE{
