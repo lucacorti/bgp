@@ -1,12 +1,14 @@
 defmodule BGP.Message.UPDATE.Attribute.Aggregator do
   @moduledoc Module.split(__MODULE__) |> Enum.map_join(" ", &String.capitalize/1)
 
-  alias BGP.{Message, Message.Encoder, Message.NOTIFICATION, Server.Session}
+  alias BGP.Message
+  alias BGP.Message.{Encoder, NOTIFICATION, OPEN}
+  alias BGP.Server.Session
 
   @asn_max :math.pow(2, 16) - 1
   @asn_four_octets_max :math.pow(2, 32) - 1
 
-  @type t :: %__MODULE__{asn: BGP.asn(), address: IP.Address.t()}
+  @type t :: %__MODULE__{asn: OPEN.asn(), address: IP.Address.t()}
 
   @enforce_keys [:asn, :address]
   defstruct asn: nil, address: nil

@@ -13,10 +13,14 @@ defmodule BGP.Message.OPEN do
   @asn_max floor(:math.pow(2, 16)) - 1
   @hold_time_min 3
 
+  @type asn :: pos_integer()
+  @type bgp_id :: IP.Address.t()
+  @type hold_time :: non_neg_integer()
+
   @type t :: %__MODULE__{
-          asn: BGP.asn(),
-          bgp_id: IP.Address.t(),
-          hold_time: BGP.hold_time(),
+          asn: asn(),
+          bgp_id: bgp_id(),
+          hold_time: non_neg_integer(),
           capabilities: Capabilities.t()
         }
   @enforce_keys [:asn, :bgp_id, :hold_time]

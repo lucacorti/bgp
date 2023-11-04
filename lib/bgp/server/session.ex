@@ -20,8 +20,8 @@ defmodule BGP.Server.Session do
   @type state :: :idle | :active | :open_sent | :open_confirm | :established
 
   @type data :: %__MODULE__{
-          asn: BGP.asn(),
-          bgp_id: BGP.bgp_id(),
+          asn: OPEN.asn(),
+          bgp_id: OPEN.bgp_id(),
           buffer: binary(),
           counters: %{atom() => non_neg_integer()},
           extended_message: boolean(),
@@ -75,7 +75,7 @@ defmodule BGP.Server.Session do
   @doc false
   def child_spec(opts), do: %{id: __MODULE__, start: {__MODULE__, :start_link, [opts]}}
 
-  @spec check_collision(t(), BGP.bgp_id()) :: :ok | {:error, :collision}
+  @spec check_collision(t(), OPEN.bgp_id()) :: :ok | {:error, :collision}
   def check_collision(session, peer_bgp_id),
     do: :gen_statem.call(session, {:check_collision, peer_bgp_id})
 
