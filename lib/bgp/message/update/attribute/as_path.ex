@@ -1,12 +1,12 @@
 defmodule BGP.Message.UPDATE.Attribute.ASPath do
   @moduledoc Module.split(__MODULE__) |> Enum.map_join(" ", &String.capitalize/1)
 
-  alias BGP.Message.{Encoder, NOTIFICATION}
+  alias BGP.Message.{Encoder, NOTIFICATION, OPEN}
   alias BGP.Server.Session
 
   @type type :: :as_sequence | :as_set | :as_confed_sequence | :as_confed_set
   @type length :: non_neg_integer()
-  @type t :: %__MODULE__{value: [{type(), length(), BGP.asn()}]}
+  @type t :: %__MODULE__{value: [{type(), length(), OPEN.asn()}]}
 
   defstruct value: []
 
