@@ -9,6 +9,7 @@ defmodule BGP.Message.OPEN do
     Server.Session
   }
 
+  @as_trans 23_456
   @asn_max floor(:math.pow(2, 16)) - 1
   @hold_time_min 3
 
@@ -121,16 +122,15 @@ defmodule BGP.Message.OPEN do
       ) do
     {data, length, session} = encode_capabilities(capabilities, session)
     {bgp_id, 32} = Message.encode_address(msg.bgp_id)
+    asn = if msg.asn < @asn_max, do: msg.asn, else: @as_trans
 
     {
       [
         <<4::8>>,
-        <<msg.asn::16>>,
+        <<asn::16>>,
         <<msg.hold_time::16>>,
         bgp_id,
-        <<255::8>>,
-        <<255::8>>,
-        <<length::16>>,
+        <<255::8, 255::8, length::16>>,
         data
       ],
       13 + length,
@@ -141,11 +141,12 @@ defmodule BGP.Message.OPEN do
   def encode(%__MODULE__{} = msg, session) do
     {data, length, session} = encode_capabilities(msg, session)
     {bgp_id, 32} = Message.encode_address(msg.bgp_id)
+    asn = if msg.asn < @asn_max, do: msg.asn, else: @as_trans
 
     {
       [
         <<4::8>>,
-        <<msg.asn::16>>,
+        <<asn::16>>,
         <<msg.hold_time::16>>,
         bgp_id,
         <<length::8>>,
