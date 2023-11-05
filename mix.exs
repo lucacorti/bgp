@@ -40,6 +40,16 @@ defmodule BGP.MixProject do
 
   defp docs() do
     [
+      before_closing_body_tag: fn
+        :html ->
+          """
+          <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+          <script>mermaid.initialize({startOnLoad: true})</script>
+          """
+
+        _ ->
+          ""
+      end,
       name: "BGP",
       groups_for_modules: [
         "Message Types": [~r/^BGP\.Message\.(KEEPALIVE|NOTIFICATION|OPEN|ROUTEREFRESH|UPDATE)$/],
