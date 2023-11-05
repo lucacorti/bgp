@@ -1,5 +1,39 @@
 defmodule BGP.Server.Session do
-  @moduledoc "BGP Finite State Machine"
+  @moduledoc """
+   BGP Session
+
+  Implementation of BGP peering session handling and the
+  [BGP FSM](https://datatracker.ietf.org/doc/html/rfc4271#section-8.2).
+
+  This is a simplified diagram of the state machine showing the most significant events
+  and state transitions:
+
+  ```mermaid
+  stateDiagram-v2
+    [*] --> Idle
+    Idle --> Connect : Start
+    Idle --> Active : Start (Passive)
+    Connect --> Idle : Stop or Error
+    Connect --> Connect : Connect Retry
+    Connect --> OpenConfirm : recv OPEN
+    Connect --> OpenSent : send OPEN
+    Connect --> Active : TCP Connection Error
+    Active --> Idle : Stop, TCP Connection Error
+    Active --> Connect : Connect Retry
+    Active --> OpenConfirm : recv OPEN
+    Active --> OpenSent : send OPEN
+    OpenSent --> Idle : Stop or Error
+    OpenSent --> Active : TCP Connection Error
+    OpenSent --> OpenConfirm : recv OPEN
+    OpenSent --> [*] : OpenCollisionDump
+    OpenConfirm --> Idle : Stop or Error
+    OpenConfirm --> Established : recv KEEPALIVE
+    OpenConfirm --> [*] : OpenCollisionDump
+    Established --> Idle : Stop or Error
+    Established --> Established :recv KEEPALIVE / UPDATE
+    Established --> [*] : OpenCollisionDump
+  ```
+  """
 
   @behaviour :gen_statem
 
