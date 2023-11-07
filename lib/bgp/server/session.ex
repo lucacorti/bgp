@@ -330,6 +330,26 @@ defmodule BGP.Server.Session do
   def handle_event({:call, from}, {:check_collision, _peer_bgp_id}, _state, _data),
     do: {:keep_state_and_data, [{:reply, from, :ok}]}
 
+  def handle_event({:call, from}, {:process_connect}, _state, %__MODULE__{} = data) do
+    {
+      :keep_state,
+      %{data | socket: from},
+      [{:next_event, :internal, {:tcp_connection, :confirmed}}, {:reply, from, :ok}]
+    }
+  end
+
+  def handle_event({:call, from}, {:process_disconnect}, _state, %__MODULE__{} = data) do
+    {
+      :keep_state,
+      %{data | socket: nil},
+      [{:next_event, :internal, {:tcp_connection, :fails}}, {:reply, from, :ok}]
+    }
+  end
+
+  def handle_event({:call, from}, {:process_recv, msg}, _state, _data) do
+    {:keep_state_and_data, [{:next_action, :internal, {:recv, msg}}, {:reply, from, :ok}]}
+  end
+
   def handle_event(:internal, :detect_collision, _state, %__MODULE__{} = data) do
     with {:ok, session} <- Server.session_for(data.server, data.host),
          :ok <- check_collision(session, data.bgp_id) do
