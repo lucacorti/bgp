@@ -16,10 +16,6 @@ defmodule BGP.Server.RDE do
   ```
   """
 
-  # TODO
-  # implement handle info for monitor
-  # {Ref, join, Group, [JoinPid1, JoinPid2]}
-
   @behaviour :gen_statem
 
   alias BGP.{Message.UPDATE, Server}
@@ -48,24 +44,18 @@ defmodule BGP.Server.RDE do
   @impl :gen_statem
   def init([server]) do
     Group.monitor(server)
-
-    data = %{}
-    actions = [{:next_event, :internal, :accept_updates}]
-
-    {:ok, :idle, data, actions}
+    {:ok, :idle, %{}, [{:state_timeout, 1_000, nil}]}
   end
 
   @impl :gen_statem
-  def handle_event(:enter, old_state, new_state, data) do
-    Logger.debug("RDE #{data}: #{old_state} -> #{new_state}")
+  def handle_event(:enter, old_state, new_state, _data) do
+    Logger.debug("RDE: #{old_state} -> #{new_state}")
     :keep_state_and_data
   end
 
   def handle_event(:internal, :accept_updates, :idle, _data) do
-    {
-      :keep_state_and_data,
-      [{:state_timeout, 1_000}]
-    }
+    # TODO update in table
+    :keep_state_and_data
   end
 
   def handle_event(:state_timeout, _, :idle, data) do
@@ -84,6 +74,7 @@ defmodule BGP.Server.RDE do
       :idle,
       data,
       [
+        {:state_timeout, 1_000, nil},
         {:next_event, :internal, :route_dissemination}
       ]
     }
@@ -94,17 +85,19 @@ defmodule BGP.Server.RDE do
     :keep_state_and_data
   end
 
-  # @spec start_link(Keyword.t()) :: GenServer.on_start()
-  # def start_link(args),
-  #   do: GenServer.start_link(__MODULE__, args, name: Server.rde_for(args[:server]))
+  def handle_event(:info, {_ref, :join, _group, _pids}, _state, _data) do
+    :keep_state_and_data
+  end
 
-  # @impl GenServer
-  # def init(_args) do
-  #   {:ok, %{rib: MapSet.new(), rib_in: MapSet.new(), rib_out: MapSet.new()}}
-  # end
+  def handle_event(:info, {_ref, :leave, _group, _pids}, _state, _data) do
+    :keep_state_and_data
+  end
 
-  # @impl GenServer
-  # def handle_call({:process_update, %UPDATE{}}, _from, state) do
-  #   {:reply, :ok, state}
-  # end
+  def handle_event({:call, from}, {:process_update, _update}, :idle, _data) do
+    {:keep_state_and_data, {:reply, from, :ok}}
+  end
+
+  def handle_event({:call, from}, {:process_update, _update}, _, _data) do
+    {:postpone, {:reply, from, :ok}}
+  end
 end

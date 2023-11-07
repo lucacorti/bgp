@@ -30,7 +30,7 @@ defmodule BGP.Server.Session.Group do
   def leave(server, group),
     do: :pg.leave(Server.session_group_for(server), group, self())
 
-  @spec monitor(Server.t()) :: {reference(), [pid()]}
+  @spec monitor(Server.t()) :: {reference(), %{optional(group()) => [pid()]}}
   def monitor(server) do
     :pg.monitor_scope(Server.session_group_for(server))
   end
