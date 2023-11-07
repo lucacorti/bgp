@@ -71,7 +71,8 @@ defmodule BGP.Server.Session do
           socket: Transport.socket(),
           start: start(),
           timers: %{atom() => Timer.t()},
-          transport: Transport.t()
+          transport: Transport.t(),
+          transport_opts: keyword()
         }
 
   @type t :: :gen_statem.server_ref()
@@ -85,7 +86,8 @@ defmodule BGP.Server.Session do
     :port,
     :server,
     :start,
-    :transport
+    :transport,
+    :transport_opts
   ]
   defstruct asn: nil,
             bgp_id: nil,
@@ -104,7 +106,8 @@ defmodule BGP.Server.Session do
             socket: nil,
             start: nil,
             timers: %{},
-            transport: nil
+            transport: nil,
+            transport_opts: []
 
   @doc false
   def child_spec(opts), do: %{id: __MODULE__, start: {__MODULE__, :start_link, [opts]}}
@@ -1284,7 +1287,8 @@ defmodule BGP.Server.Session do
           %{},
           &{&1, Timer.new(get_in(peer, [&1, :seconds]), get_in(peer, [&1, :enabled?]) != false)}
         ),
-      transport: server[:transport]
+      transport: peer[:transport],
+      transport_opts: peer[:transport_opts]
     }
   end
 

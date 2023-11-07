@@ -10,7 +10,7 @@ defmodule BGP.Server.Session.Transport.Process do
 
   @impl Transport
   def connect(%Session{} = data) do
-    with {:ok, pid} <- Server.session_for(data.server, data.host),
+    with {:ok, pid} <- Server.session_for(data.transport_opts[:server], data.host),
          :ok <- :gen_statem.call(pid, {:process_connect}) do
       {:ok, pid}
     end
@@ -18,7 +18,7 @@ defmodule BGP.Server.Session.Transport.Process do
 
   @impl Transport
   def disconnect(%Session{} = data) do
-    with {:ok, pid} <- Server.session_for(data.server, data.host),
+    with {:ok, pid} <- Server.session_for(data.transport_opts[:server], data.host),
          do: :gen_statem.call(pid, {:process_disconnect})
   end
 
