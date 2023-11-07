@@ -88,6 +88,17 @@ defmodule BGP.Server do
                  doc: "Type of session startup.",
                  type: {:in, [:automatic, :manual]},
                  default: :automatic
+               ],
+               transport: [
+                 doc:
+                   "Server transport. Allows to use a transport different from TCP. Not normally needed.",
+                 type: :atom,
+                 default: BGP.Server.Session.Transport.TCP
+               ],
+               transport_opts: [
+                 doc: "Server transport options. Transport specific.",
+                 type: :keyword_list,
+                 default: []
                ]
 
   @server_schema asn: [
@@ -114,12 +125,6 @@ defmodule BGP.Server do
                    doc: "List of peer configurations (`t:peer_options/0`).",
                    type: {:list, {:keyword_list, @peer_schema}},
                    default: []
-                 ],
-                 transport: [
-                   doc:
-                     "Server transport. Allows to use a transport different from TCP. Not normally needed.",
-                   type: :atom,
-                   default: BGP.Server.Session.Transport.TCP
                  ]
 
   @typedoc """
