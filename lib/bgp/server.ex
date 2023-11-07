@@ -168,7 +168,8 @@ defmodule BGP.Server do
     Supervisor.init(
       [
         {Registry, keys: :unique, name: session_registry(args[:server])},
-        {BGP.Server.RDE, server: args[:server]},
+        {BGP.Server.Session.Group, args[:server]},
+        {BGP.Server.RDE, args[:server]},
         {BGP.Server.Session.Supervisor, args[:server]},
         {
           ThousandIsland,
@@ -239,5 +240,8 @@ defmodule BGP.Server do
   def session_registry(server), do: Module.concat(server, "Session.Registry")
 
   @spec session_via(t(), IP.Address.t()) :: {:via, module(), term()}
-  def session_via(server, host), do: {:via, Registry, {session_registry(server), host}}
+  def session_via(server, hostname), do: {:via, Registry, {session_registry(server), hostname}}
+
+  @spec session_group_for(t()) :: module()
+  def session_group_for(server), do: Module.concat(server, "Session.Group")
 end
