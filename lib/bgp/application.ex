@@ -7,7 +7,7 @@ defmodule BGP.Application do
   def start(_type, _args) do
     children =
       if Mix.env() == :dev do
-        [{BGP.Server, BGP.MyServer}]
+        [{BGP.Server, BGP.MyServer}, {BGP.Server, BGP.MyOtherServer}]
       else
         []
       end

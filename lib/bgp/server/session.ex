@@ -110,11 +110,20 @@ defmodule BGP.Server.Session do
             transport_opts: []
 
   @doc false
-  def child_spec(opts), do: %{id: __MODULE__, start: {__MODULE__, :start_link, [opts]}}
+  def child_spec({opts, _}),
+    do: %{id: make_ref(), start: {__MODULE__, :start_link, [opts]}}
+
+  def child_spec(opts),
+    do: %{id: make_ref(), start: {__MODULE__, :start_link, [opts]}}
 
   @spec check_collision(t(), OPEN.bgp_id()) :: :ok | {:error, :collision}
-  def check_collision(session, peer_bgp_id),
-    do: :gen_statem.call(session, {:check_collision, peer_bgp_id})
+  def check_collision(session, peer_bgp_id) do
+    if session == self() do
+      :ok
+    else
+      :gen_statem.call(session, {:check_collision, peer_bgp_id})
+    end
+  end
 
   @spec manual_start(t()) :: :ok | {:error, :already_started}
   def manual_start(session), do: :gen_statem.call(session, {:start, :manual})
@@ -330,10 +339,10 @@ defmodule BGP.Server.Session do
   def handle_event({:call, from}, {:check_collision, _peer_bgp_id}, _state, _data),
     do: {:keep_state_and_data, [{:reply, from, :ok}]}
 
-  def handle_event({:call, from}, {:process_connect}, _state, %__MODULE__{} = data) do
+  def handle_event({:call, {pid, _tag} = from}, {:process_connect}, _state, %__MODULE__{} = data) do
     {
       :keep_state,
-      %{data | socket: from},
+      %{data | socket: pid},
       [{:next_event, :internal, {:tcp_connection, :confirmed}}, {:reply, from, :ok}]
     }
   end
@@ -346,9 +355,8 @@ defmodule BGP.Server.Session do
     }
   end
 
-  def handle_event({:call, from}, {:process_recv, msg}, _state, _data) do
-    {:keep_state_and_data, [{:next_action, :internal, {:recv, msg}}, {:reply, from, :ok}]}
-  end
+  def handle_event(:cast, {:process_recv, msg}, _state, _data),
+    do: {:keep_state_and_data, [{:next_event, :internal, {:recv, msg}}]}
 
   def handle_event(:internal, :detect_collision, _state, %__MODULE__{} = data) do
     with {:ok, session} <- Server.session_for(data.server, data.host),
