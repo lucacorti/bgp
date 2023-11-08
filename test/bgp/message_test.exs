@@ -22,7 +22,8 @@ defmodule BGP.MessageTest do
         port: 179,
         start: :manual,
         server: nil,
-        transport: TCP
+        transport: TCP,
+        transport_opts: []
       }
     }
   end
