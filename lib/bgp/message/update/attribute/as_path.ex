@@ -6,7 +6,7 @@ defmodule BGP.Message.UPDATE.Attribute.ASPath do
 
   @type type :: :as_sequence | :as_set | :as_confed_sequence | :as_confed_set
   @type length :: non_neg_integer()
-  @type t :: %__MODULE__{value: [{type(), length(), OPEN.asn()}]}
+  @type t :: %__MODULE__{value: {type(), length(), [OPEN.asn()]}}
 
   defstruct value: []
 
