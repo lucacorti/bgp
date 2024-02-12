@@ -43,7 +43,7 @@ defmodule BGP.Server.Session do
   alias BGP.Message.UPDATE.Attribute
   alias BGP.Message.UPDATE.Attribute.{ASPath, NextHop, Origin}
   alias BGP.Server.RDE
-  alias BGP.Server.Session.{Timer, Transport}
+  alias BGP.Server.Session.{Group, Timer, Transport}
 
   alias ThousandIsland.Socket
 
@@ -184,7 +184,10 @@ defmodule BGP.Server.Session do
     {
       :keep_state,
       %{data | buffer: <<>>, socket: nil},
-      [{:next_event, :internal, {:tcp_connection, :fails}}]
+      [
+        {:next_event, :internal, {:tcp_connection, :fails}},
+        {:next_event, :internal, :leave_session_group}
+      ]
     }
   end
 
@@ -317,6 +320,16 @@ defmodule BGP.Server.Session do
       %{data | timers: update_in(data.timers, [timer], &Timer.stop/1)},
       [{{:timeout, timer}, :cancel}]
     }
+  end
+
+  def handle_event(:internal, :join_session_group, _state, %__MODULE__{} = data) do
+    Group.join(data.server, data.host)
+    :keep_state_and_data
+  end
+
+  def handle_event(:internal, :leave_session_group, _state, %__MODULE__{} = data) do
+    Group.leave(data.server, data.host)
+    :keep_state_and_data
   end
 
   def handle_event({:call, from}, {:check_collision, _peer_bgp_id}, :established, _data),
@@ -1064,7 +1077,8 @@ defmodule BGP.Server.Session do
             {:next_event, :internal, {:restart_timer, :as_origination, nil}},
             {:next_event, :internal, {:restart_timer, :hold_time, nil}},
             {:next_event, :internal, {:restart_timer, :route_advertisement, nil}},
-            {:next_event, :internal, {:send, compose_as_update(data)}}
+            {:next_event, :internal, {:send, compose_as_update(data)}},
+            {:next_event, :internal, :join_session_group}
           ]
         }
     end
@@ -1161,10 +1175,27 @@ defmodule BGP.Server.Session do
     end
   end
 
-  def handle_event({:timeout, :route_advertisement}, _event, :established, _data) do
+  def handle_event({:timeout, :route_advertisement}, _event, :established, data) do
+    IO.inspect(:WWWWWWWWWWWWWWW)
+
+    events =
+      data.server
+      |> RDE.get_loc_rib()
+      |> Enum.map(fn {prefix, path_attributes} ->
+        {:next_event, :internal,
+         {:send,
+          %UPDATE{
+            path_attributes: path_attributes,
+            nlri: [prefix]
+          }}}
+      end)
+      |> IO.inspect(label: :aaaaaa)
+
     {
       :keep_state_and_data,
-      [{:next_event, :internal, {:restart_timer, :route_advertisement, nil}}]
+      [
+        {:next_event, :internal, {:restart_timer, :route_advertisement, nil}} | events
+      ]
     }
   end
 
@@ -1240,11 +1271,11 @@ defmodule BGP.Server.Session do
         :keep_state_and_data
 
       %UPDATE{} when hold_time > 0 ->
-        RDE.process_update(data.server, msg)
+        RDE.process_update(data, msg)
         {:keep_state_and_data, [{:next_event, :internal, {:restart_timer, :hold_time, nil}}]}
 
       %UPDATE{} ->
-        RDE.process_update(data.server, msg)
+        RDE.process_update(data, msg)
         :keep_state_and_data
     end
   end
