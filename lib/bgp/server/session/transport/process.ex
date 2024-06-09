@@ -1,5 +1,5 @@
 defmodule BGP.Server.Session.Transport.Process do
-  @moduledoc "TCP Transport"
+  @moduledoc "Process Transport"
 
   alias BGP.Message
   alias BGP.Server
