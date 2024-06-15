@@ -38,7 +38,7 @@ defmodule BGP.MessageTest do
   end
 
   test "NOTIFICATION encode and decode", %{session: session} do
-    code = :session
+    code = :fsm
     subcode = :unspecific
     data = <<>>
 
