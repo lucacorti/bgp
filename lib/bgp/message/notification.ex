@@ -45,7 +45,7 @@ defmodule BGP.Message.NOTIFICATION do
     {4, :hold_timer_expired, []},
     {
       5,
-      :session,
+      :fsm,
       [
         {1, :unexpected_message_in_open_sent},
         {2, :unexpected_message_in_open_confirm},
@@ -151,6 +151,8 @@ defmodule BGP.Message.NOTIFICATION do
   for {code, reason, _subcodes} <- errors do
     defp encode_code(unquote(reason)), do: unquote(code)
   end
+
+  defp encode_code(:unspecific), do: 0
 
   for {_code, reason, subcodes} <- errors do
     for {subcode, subreason} <- subcodes do

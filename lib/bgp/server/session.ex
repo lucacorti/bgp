@@ -144,7 +144,7 @@ defmodule BGP.Server.Session do
   @impl :gen_statem
   def init(peer) do
     Process.flag(:trap_exit, true)
-    data = setup_session(peer)
+    %__MODULE__{} = data = setup_session(peer)
 
     actions =
       if data.start == :automatic do
@@ -159,6 +159,13 @@ defmodule BGP.Server.Session do
   @impl :gen_statem
   def handle_event(:enter, old_state, new_state, %__MODULE__{} = data) do
     Logger.debug("peer #{data.host}: #{old_state} -> #{new_state}")
+
+    :telemetry.execute(
+      [:bgp, :session, :state],
+      %{prev_state: old_state, state: new_state},
+      %{server: data.server, peer: data.host}
+    )
+
     :keep_state_and_data
   end
 
@@ -178,7 +185,7 @@ defmodule BGP.Server.Session do
   end
 
   def handle_event(:internal, {:tcp_connection, :disconnect}, _state, %__MODULE__{} = data) do
-    :ok = data.transport.close(data)
+    :ok = data.transport.disconnect(data)
     Logger.error("Connection to peer #{data.host} closed")
 
     {

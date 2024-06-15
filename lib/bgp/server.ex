@@ -165,18 +165,23 @@ defmodule BGP.Server do
 
   @impl Supervisor
   def init(args) do
-    Supervisor.init(
-      [
-        {Registry, keys: :unique, name: session_registry(args[:server])},
-        {BGP.Server.RDE, server: args[:server]},
-        {BGP.Server.Session.Supervisor, args[:server]},
-        {
-          ThousandIsland,
-          port: args[:port], handler_module: BGP.Server.Session, handler_options: args
-        }
-      ],
-      strategy: :one_for_all
-    )
+    ret =
+      Supervisor.init(
+        [
+          {Registry, keys: :unique, name: session_registry(args[:server])},
+          {BGP.Server.RDE, server: args[:server]},
+          {BGP.Server.Session.Supervisor, args[:server]},
+          {
+            ThousandIsland,
+            port: args[:port], handler_module: BGP.Server.Session, handler_options: args
+          }
+        ],
+        strategy: :one_for_all
+      )
+
+    :telemetry.execute([:bgp, :server, :start], %{}, %{server: args[:server]})
+
+    ret
   end
 
   @spec get_config(t()) :: keyword()

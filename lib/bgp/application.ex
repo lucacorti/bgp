@@ -5,12 +5,7 @@ defmodule BGP.Application do
 
   @impl true
   def start(_type, _args) do
-    children =
-      if Mix.env() == :dev do
-        [{BGP.Server, BGP.MyServer}, {BGP.Server, BGP.MyOtherServer}]
-      else
-        []
-      end
+    children = []
 
     Supervisor.start_link(children, strategy: :one_for_one, name: BGP.Supervisor)
   end
