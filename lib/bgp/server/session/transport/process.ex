@@ -14,12 +14,18 @@ defmodule BGP.Server.Session.Transport.Process do
          :ok <- :gen_statem.call(pid, {:process_connect}) do
       {:ok, pid}
     end
+  catch
+    type, error ->
+      {:error, {type, error}}
   end
 
   @impl Transport
   def disconnect(%Session{} = data) do
     with {:ok, pid} <- Server.session_for(data.transport_opts[:server], data.bgp_id),
          do: :gen_statem.call(pid, {:process_disconnect})
+  catch
+    type, error ->
+      {:error, {type, error}}
   end
 
   @impl Transport
