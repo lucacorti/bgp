@@ -179,7 +179,7 @@ defmodule BGP.Server.Session do
         }
 
       {:error, error} ->
-        Logger.error("Connection to peer #{data.host} failed, reason: #{error}")
+        Logger.error("Connection to peer #{data.host} failed, reason: #{inspect(error)}")
         {:keep_state, %{data | socket: nil, buffer: <<>>}}
     end
   end
@@ -434,6 +434,8 @@ defmodule BGP.Server.Session do
       ]
     }
   end
+
+  def handle_event(_event_type, _event, :idle, _data), do: :keep_state_and_data
 
   def handle_event(_event_type, {:start, _type, _mode}, :connect, _data), do: :keep_state_and_data
 
