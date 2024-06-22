@@ -244,7 +244,7 @@ defmodule BGP.Server.Session do
         _state,
         %__MODULE__{} = data
       ) do
-    case server_config.transport_module.peername(raw_socket) do
+    case :inet.peername(raw_socket) do
       {:ok, {address, port}} ->
         connection_span =
           ThousandIsland.Telemetry.start_child_span(
@@ -275,7 +275,7 @@ defmodule BGP.Server.Session do
         end
 
       {:error, _reason} ->
-        _ = server_config.transport_module.close(raw_socket)
+        server_config.transport.close(raw_socket)
         {:stop, :normal}
     end
   catch
