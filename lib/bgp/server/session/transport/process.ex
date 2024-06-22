@@ -11,7 +11,7 @@ defmodule BGP.Server.Session.Transport.Process do
   @impl Transport
   def connect(%Session{} = data) do
     with {:ok, pid} <- Server.session_for(data.transport_opts[:server], data.bgp_id),
-         :ok <- :gen_statem.call(pid, {:process_connect}) do
+         :ok <- :gen_statem.call(pid, {:process_accept}) do
       {:ok, pid}
     end
   catch

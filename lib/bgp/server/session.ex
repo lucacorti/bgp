@@ -254,12 +254,12 @@ defmodule BGP.Server.Session do
             %{remote_address: address, remote_port: port}
           )
 
-        socket = ThousandIsland.Socket.new(raw_socket, server_config, connection_span)
         ThousandIsland.Telemetry.span_event(connection_span, :ready)
+        socket = ThousandIsland.Socket.new(raw_socket, server_config, connection_span)
 
-        with {:ok, socket} <- ThousandIsland.Socket.handshake(socket),
-             {:ok, host} <- IP.Address.from_tuple(address),
+        with {:ok, host} <- IP.Address.from_tuple(address),
              {:ok, peer} <- Server.get_peer(data.server, host),
+             {:ok, socket} <- ThousandIsland.Socket.handshake(socket),
              :ok <- Socket.setopts(socket, mode: :binary, active: :once) do
           {
             :next_state,
@@ -275,7 +275,7 @@ defmodule BGP.Server.Session do
         end
 
       {:error, _reason} ->
-        server_config.transport.close(raw_socket)
+        :gen_tcp.close(raw_socket)
         {:stop, :normal}
     end
   catch
@@ -346,7 +346,7 @@ defmodule BGP.Server.Session do
   def handle_event({:call, from}, {:check_collision, _peer_bgp_id}, _state, _data),
     do: {:keep_state_and_data, [{:reply, from, :ok}]}
 
-  def handle_event({:call, {pid, _tag} = from}, {:process_connect}, _state, %__MODULE__{} = data) do
+  def handle_event({:call, {pid, _tag} = from}, {:process_accept}, _state, %__MODULE__{} = data) do
     {
       :keep_state,
       %{data | socket: pid},
