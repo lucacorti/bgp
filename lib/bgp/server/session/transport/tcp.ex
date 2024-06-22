@@ -16,8 +16,8 @@ defmodule BGP.Server.Session.Transport.TCP do
   end
 
   @impl Transport
-  def disconnect(%Session{socket: %Socket{}} = data), do: Socket.close(data.socket)
-  def disconnect(%Session{} = data), do: :gen_tcp.close(data.socket)
+  def close(%Session{socket: %Socket{}} = data), do: Socket.close(data.socket)
+  def close(%Session{} = data), do: :gen_tcp.close(data.socket)
 
   @impl Transport
   def send(%Session{socket: %Socket{}} = data, msg) do

@@ -185,7 +185,7 @@ defmodule BGP.Server.Session do
   end
 
   def handle_event(:internal, {:tcp_connection, :disconnect}, _state, %__MODULE__{} = data) do
-    :ok = data.transport.disconnect(data)
+    :ok = data.transport.close(data)
     Logger.error("Connection to peer #{data.host} closed")
 
     {

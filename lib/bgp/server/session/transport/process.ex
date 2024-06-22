@@ -20,7 +20,7 @@ defmodule BGP.Server.Session.Transport.Process do
   end
 
   @impl Transport
-  def disconnect(%Session{} = data) do
+  def close(%Session{} = data) do
     with {:ok, pid} <- Server.session_for(data.transport_opts[:server], data.bgp_id),
          do: :gen_statem.call(pid, {:process_disconnect})
   catch
