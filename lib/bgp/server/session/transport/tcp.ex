@@ -29,5 +29,8 @@ defmodule BGP.Server.Session.Transport.TCP do
   def send(%Session{} = data, msg) do
     {msg_data, data} = Message.encode(msg, data)
     with :ok <- :gen_tcp.send(data.socket, msg_data), do: {:ok, data}
+  catch
+    type, error ->
+      {:error, {type, error}}
   end
 end

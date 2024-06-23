@@ -36,7 +36,9 @@ defmodule BGP.Server.Session.Transport.Process do
   @impl Transport
   def send(%Session{} = data, msg) do
     {_msg_data, data} = Message.encode(msg, data)
-
     with :ok <- :gen_statem.cast(data.socket, {:process_recv, msg}), do: {:ok, data}
+  catch
+    type, error ->
+      {:error, {type, error}}
   end
 end
