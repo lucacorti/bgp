@@ -10,8 +10,14 @@ defmodule BGP.Server.Session.Transport.Process do
 
   @impl Transport
   def connect(%Session{} = data) do
-    with {:ok, pid} <- Server.session_for(data.transport_opts[:server], data.bgp_id),
-         :ok <- :gen_statem.call(pid, {:process_accept}) do
+    server_config = Server.get_config(data.server)
+    peer_server = data.transport_opts[:server]
+    peer_server_session_supervisor = Server.session_supervisor(peer_server)
+
+    with {:ok, peer} <- Server.get_peer(peer_server, server_config[:bgp_id]),
+         peer = Keyword.merge(peer, start: :automatic, mode: :passive),
+         {:ok, pid} <- Session.Supervisor.start_child(peer_server_session_supervisor, peer),
+         :ok <- :gen_statem.call(pid, {:process_connect}) do
       {:ok, pid}
     end
   catch
@@ -21,8 +27,7 @@ defmodule BGP.Server.Session.Transport.Process do
 
   @impl Transport
   def close(%Session{} = data) do
-    with {:ok, pid} <- Server.session_for(data.transport_opts[:server], data.bgp_id),
-         do: :gen_statem.call(pid, {:process_disconnect})
+    :gen_statem.call(data.socket, {:process_disconnect})
   catch
     type, error ->
       {:error, {type, error}}

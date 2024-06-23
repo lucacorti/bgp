@@ -110,8 +110,8 @@ defmodule BGP.Server.Session do
             transport_opts: []
 
   @doc false
-  def child_spec({opts, _}),
-    do: %{id: make_ref(), start: {__MODULE__, :start_link, [opts]}}
+  def child_spec({args, opts}),
+    do: %{id: make_ref(), start: {__MODULE__, :start_link, [{args, opts}]}}
 
   def child_spec(opts),
     do: %{id: make_ref(), start: {__MODULE__, :start_link, [opts]}}
@@ -158,13 +158,17 @@ defmodule BGP.Server.Session do
 
   @impl :gen_statem
   def handle_event(:enter, old_state, new_state, %__MODULE__{} = data) do
-    Logger.debug("peer #{data.host}: #{old_state} -> #{new_state}")
+    with {:ok, pid} <- Server.session_for(data.server, data.host) do
+      if pid == self() do
+        Logger.info("#{data.server}: peer #{data.host}: #{old_state} -> #{new_state}")
 
-    :telemetry.execute(
-      [:bgp, :session, :state],
-      %{prev_state: old_state, state: new_state},
-      %{server: data.server, peer: data.host}
-    )
+        :telemetry.execute(
+          [:bgp, :session, :state],
+          %{prev_state: old_state, state: new_state},
+          %{server: data.server, peer: data.host}
+        )
+      end
+    end
 
     :keep_state_and_data
   end
@@ -179,14 +183,17 @@ defmodule BGP.Server.Session do
         }
 
       {:error, error} ->
-        Logger.error("Connection to peer #{data.host} failed, reason: #{inspect(error)}")
+        Logger.error(
+          "#{data.server}: connection to peer #{data.host} failed, reason: #{inspect(error)}"
+        )
+
         {:keep_state, %{data | socket: nil, buffer: <<>>}}
     end
   end
 
   def handle_event(:internal, {:tcp_connection, :disconnect}, _state, %__MODULE__{} = data) do
-    :ok = data.transport.close(data)
-    Logger.error("Connection to peer #{data.host} closed")
+    data.transport.close(data)
+    Logger.error("#{data.server}: connection to peer #{data.host} closed")
 
     {
       :keep_state,
@@ -198,17 +205,17 @@ defmodule BGP.Server.Session do
   def handle_event(:internal, {:send, msg}, _state, %__MODULE__{} = data) do
     case data.transport.send(data, msg) do
       {:ok, data} ->
-        Logger.debug("peer #{data.host}: sent #{inspect(msg)}")
+        # Logger.debug("peer #{data.host}: sent #{inspect(msg)}")
         {:keep_state, data}
 
       {:error, _reason} ->
-        Logger.error("Error sending #{inspect(msg)} to peer #{data.host} failed")
+        Logger.error("#{data.server}: sending #{inspect(msg)} to peer #{data.host} failed")
         {:keep_state_and_data, [{:next_event, :internal, {:tcp_connection, :fails}}]}
     end
   end
 
   def handle_event(:info, {:tcp_closed, _port}, _state, %__MODULE__{} = data) do
-    Logger.error("Connection closed by peer #{data.host}")
+    Logger.error("#{data.server}: connection closed by peer #{data.host}")
     {:keep_state, %{data | socket: nil}, [{:next_event, :internal, {:tcp_connection, :fails}}]}
   end
 
@@ -218,14 +225,14 @@ defmodule BGP.Server.Session do
       |> Message.stream!()
       |> Enum.map_reduce(data, fn {rest, msg_data}, %__MODULE__{} = data ->
         {msg, data} = Message.decode(msg_data, data)
-        Logger.debug("peer #{data.host}: received #{inspect(msg)}")
+        # Logger.debug("peer #{data.host}: received #{inspect(msg)}")
         {{:next_event, :internal, {:recv, msg}}, %{data | buffer: rest}}
       end)
 
     {:keep_state, data, actions}
   catch
     :error, %NOTIFICATION{} = error ->
-      Logger.error("peer #{data.host}: error decoding message: #{inspect(error)}")
+      Logger.error("#{data.server}: peer #{data.host}: error decoding message: #{inspect(error)}")
 
       {
         :keep_state_and_data,
@@ -346,20 +353,25 @@ defmodule BGP.Server.Session do
   def handle_event({:call, from}, {:check_collision, _peer_bgp_id}, _state, _data),
     do: {:keep_state_and_data, [{:reply, from, :ok}]}
 
-  def handle_event({:call, {pid, _tag} = from}, {:process_accept}, _state, %__MODULE__{} = data) do
-    {
-      :keep_state,
-      %{data | socket: pid},
-      [{:next_event, :internal, {:tcp_connection, :confirmed}}, {:reply, from, :ok}]
-    }
+  def handle_event({:call, {pid, _} = from}, {:process_connect}, _state, %__MODULE__{} = data) do
+    with {:ok, peer} <- Server.get_peer(data.server, data.host) do
+      {
+        :next_state,
+        :idle,
+        %__MODULE__{setup_session(peer) | socket: pid},
+        [
+          {:next_event, :internal, {:start, :automatic, :passive}},
+          {:next_event, :internal, {:tcp_connection, :confirmed}},
+          {:reply, from, :ok}
+        ]
+      }
+    else
+      {:error, _reason} = error -> {:stop_and_reply, :normal, [{:reply, from, error}]}
+    end
   end
 
-  def handle_event({:call, from}, {:process_disconnect}, _state, %__MODULE__{} = data) do
-    {
-      :keep_state,
-      %{data | socket: nil},
-      [{:next_event, :internal, {:tcp_connection, :fails}}, {:reply, from, :ok}]
-    }
+  def handle_event({:call, from}, {:process_disconnect}, _state, _data) do
+    {:stop_and_reply, [{:reply, from, :ok}]}
   end
 
   def handle_event(:cast, {:process_recv, msg}, _state, _data),
@@ -371,10 +383,14 @@ defmodule BGP.Server.Session do
       :keep_state_and_data
     else
       {:error, :collision} ->
-        Logger.warning("peer #{data.host}: connection collides with existing session, closing")
+        Logger.warning(
+          "#{data.server}: peer #{data.host}: connection collides with existing session, closing"
+        )
+
         {:stop, :normal}
 
       {:error, :not_found} ->
+        Logger.info("#{data.server}: peer #{data.host}: no collision, registering active session")
         Server.register_session(data.server, data.host)
         :keep_state_and_data
     end
@@ -1243,16 +1259,20 @@ defmodule BGP.Server.Session do
         }
 
       %KEEPALIVE{} when hold_time > 0 ->
+        Logger.info("#{data.server}: received keepalive from #{data.host}")
         {:keep_state_and_data, [{:next_event, :internal, {:restart_timer, :hold_time, nil}}]}
 
       %KEEPALIVE{} ->
+        Logger.info("#{data.server}: received keepalive from #{data.host}")
         :keep_state_and_data
 
       %UPDATE{} when hold_time > 0 ->
+        Logger.info("#{data.server}: received update from #{data.host}")
         RDE.process_update(data.server, msg)
         {:keep_state_and_data, [{:next_event, :internal, {:restart_timer, :hold_time, nil}}]}
 
       %UPDATE{} ->
+        Logger.info("#{data.server}: received update from #{data.host}")
         RDE.process_update(data.server, msg)
         :keep_state_and_data
     end
