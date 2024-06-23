@@ -354,19 +354,21 @@ defmodule BGP.Server.Session do
     do: {:keep_state_and_data, [{:reply, from, :ok}]}
 
   def handle_event({:call, {pid, _} = from}, {:process_connect}, _state, %__MODULE__{} = data) do
-    with {:ok, peer} <- Server.get_peer(data.server, data.host) do
-      {
-        :next_state,
-        :idle,
-        %__MODULE__{setup_session(peer) | socket: pid},
-        [
-          {:next_event, :internal, {:start, :automatic, :passive}},
-          {:next_event, :internal, {:tcp_connection, :confirmed}},
-          {:reply, from, :ok}
-        ]
-      }
-    else
-      {:error, _reason} = error -> {:stop_and_reply, :normal, [{:reply, from, error}]}
+    case Server.get_peer(data.server, data.host) do
+      {:ok, peer} ->
+        {
+          :next_state,
+          :idle,
+          %__MODULE__{setup_session(peer) | socket: pid},
+          [
+            {:next_event, :internal, {:start, :automatic, :passive}},
+            {:next_event, :internal, {:tcp_connection, :confirmed}},
+            {:reply, from, :ok}
+          ]
+        }
+
+      {:error, _reason} = error ->
+        {:stop_and_reply, :normal, [{:reply, from, error}]}
     end
   end
 
