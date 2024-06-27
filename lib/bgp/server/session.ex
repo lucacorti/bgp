@@ -1280,7 +1280,7 @@ defmodule BGP.Server.Session do
     end
   end
 
-  def handle_event(_type, _event, :establised, data) do
+  def handle_event(_type, _event, :established, data) do
     {
       :next_state,
       :idle,
