@@ -165,23 +165,18 @@ defmodule BGP.Server do
 
   @impl Supervisor
   def init(args) do
-    ret =
-      Supervisor.init(
-        [
-          {Registry, keys: :unique, name: session_registry(args[:server])},
-          {BGP.Server.RDE, server: args[:server]},
-          {BGP.Server.Session.Supervisor, args[:server]},
-          {
-            ThousandIsland,
-            port: args[:port], handler_module: BGP.Server.Session, handler_options: args
-          }
-        ],
-        strategy: :one_for_all
-      )
-
-    :telemetry.execute([:bgp, :server, :start], %{}, %{server: args[:server]})
-
-    ret
+    Supervisor.init(
+      [
+        {Registry, keys: :unique, name: session_registry(args[:server])},
+        {BGP.Server.RDE, server: args[:server]},
+        {BGP.Server.Session.Supervisor, args[:server]},
+        {
+          ThousandIsland,
+          port: args[:port], handler_module: BGP.Server.Session, handler_options: args
+        }
+      ],
+      strategy: :one_for_all
+    )
   end
 
   @spec get_config(t()) :: keyword()
@@ -242,6 +237,9 @@ defmodule BGP.Server do
 
   @spec session_registry(t()) :: module()
   def session_registry(server), do: Module.concat(server, "Session.Registry")
+
+  @spec session_supervisor(t()) :: module()
+  def session_supervisor(server), do: Module.concat(server, "Session.Supervisor")
 
   @spec session_via(t(), IP.Address.t()) :: {:via, module(), term()}
   def session_via(server, host), do: {:via, Registry, {session_registry(server), host}}
