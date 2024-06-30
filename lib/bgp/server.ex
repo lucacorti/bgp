@@ -163,6 +163,9 @@ defmodule BGP.Server do
   def start_link(server),
     do: Supervisor.start_link(__MODULE__, get_config(server), name: server)
 
+  @spec stop(t(), reason :: term()) :: :ok
+  def stop(server, reason), do: Supervisor.stop(server, reason)
+
   @impl Supervisor
   def init(args) do
     Supervisor.init(
