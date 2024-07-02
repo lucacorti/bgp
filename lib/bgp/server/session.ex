@@ -496,6 +496,8 @@ defmodule BGP.Server.Session do
     }
   end
 
+  def handle_event(:internal, {:stop, reason}, _state, _data), do: {:stop, reason}
+
   def handle_event(:internal, {:tcp_connection, event}, :connect, data)
       when event in [:confirmed, :request_acked] do
     if timer_enabled?(data, :delay_open) do
@@ -890,7 +892,7 @@ defmodule BGP.Server.Session do
         {:next_event, :internal, {:increment_counter, :connect_retry}},
         {:next_event, :internal, {:send, %NOTIFICATION{code: :cease}}},
         {:next_event, :internal, {:tcp_connection, :disconnect}},
-        {:stop, :normal}
+        {:next_event, :internal, {:stop, :normal}}
       ]
     }
   end
@@ -1050,7 +1052,7 @@ defmodule BGP.Server.Session do
         {:next_event, :internal, {:increment_counter, :connect_retry}},
         {:next_event, :internal, {:send, %NOTIFICATION{code: :cease}}},
         {:next_event, :internal, {:tcp_connection, :disconnect}},
-        {:stop, :normal}
+        {:next_event, :internal, {:stop, :normal}}
       ]
     }
   end
