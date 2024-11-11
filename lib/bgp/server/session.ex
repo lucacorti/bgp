@@ -1,6 +1,6 @@
 defmodule BGP.Server.Session do
   @moduledoc """
-   BGP Session
+  BGP Session
 
   Implementation of BGP peering session handling and the
   [BGP FSM](https://datatracker.ietf.org/doc/html/rfc4271#section-8.2).
@@ -1272,12 +1272,12 @@ defmodule BGP.Server.Session do
 
       %UPDATE{} when hold_time > 0 ->
         Logger.info("#{data.server}: received update from #{data.host}")
-        RDE.process_update(data.server, msg)
+        RDE.process_update(data.server, data, msg)
         {:keep_state_and_data, [{:next_event, :internal, {:restart_timer, :hold_time, nil}}]}
 
       %UPDATE{} ->
         Logger.info("#{data.server}: received update from #{data.host}")
-        RDE.process_update(data.server, msg)
+        RDE.process_update(data.server, data, msg)
         :keep_state_and_data
     end
   end
