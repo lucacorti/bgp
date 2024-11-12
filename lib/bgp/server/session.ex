@@ -1272,12 +1272,12 @@ defmodule BGP.Server.Session do
 
       %UPDATE{} when hold_time > 0 ->
         Logger.info("#{data.server}: received update from #{data.host}")
-        RDE.process_update(data.server, data, msg)
+        RDE.queue_update(data.server, data, msg)
         {:keep_state_and_data, [{:next_event, :internal, {:restart_timer, :hold_time, nil}}]}
 
       %UPDATE{} ->
         Logger.info("#{data.server}: received update from #{data.host}")
-        RDE.process_update(data.server, data, msg)
+        RDE.queue_update(data.server, data, msg)
         :keep_state_and_data
     end
   end

@@ -11,8 +11,8 @@ defmodule BGP.Server.RDE do
   ```mermaid
   stateDiagram-v2
     [*] --> Idle
-    Idle --> DegreeOfPreference : recv UPDATE
-    DegreeOfPreference --> Idle : Process UPDATE
+    Idle --> Processing : state_timeout
+    Processing --> Idle : Processing done
   ```
   """
   @behaviour :gen_statem
@@ -25,8 +25,8 @@ defmodule BGP.Server.RDE do
 
   require Logger
 
-  @enforce_keys [:config, :adj_ribs_in]
-  defstruct [:config, :adj_ribs_in]
+  @enforce_keys [:config, :adj_ribs_in, :update_queue]
+  defstruct [:config, :adj_ribs_in, :update_queue]
 
   @spec start_link(Keyword.t()) :: GenServer.on_start()
   def start_link(args),
@@ -39,8 +39,8 @@ defmodule BGP.Server.RDE do
   def child_spec(opts),
     do: %{id: make_ref(), start: {__MODULE__, :start_link, [opts]}}
 
-  @spec process_update(Server.t(), Session.data(), UPDATE.t()) :: :ok
-  def process_update(server, session, update),
+  @spec queue_update(Server.t(), Session.data(), UPDATE.t()) :: :ok
+  def queue_update(server, session, update),
     do: :gen_statem.call(Server.rde_for(server), {:process_update, session, update})
 
   @impl :gen_statem
@@ -53,8 +53,10 @@ defmodule BGP.Server.RDE do
       :idle,
       %__MODULE__{
         config: args,
+        update_queue: :queue.new(),
         adj_ribs_in: RIB.new(:adj_ribs_in)
-      }
+      },
+      {:state_timeout, 10_000, nil}
     }
   end
 
@@ -67,46 +69,83 @@ defmodule BGP.Server.RDE do
   @impl :gen_statem
   def handle_event(
         {:call, from},
-        {:process_update, _session, _update},
+        {:queue_update, session, update},
         :idle,
-        data
-      ) do
-    {:next_state, :degree_of_preference, data, [{:reply, from, :ok}, :postpone]}
-  end
-
-  @impl :gen_statem
-  def handle_event(
-        {:call, _from},
-        {:process_update, %Session{} = session, %UPDATE{} = update},
-        :degree_of_preference,
         %__MODULE__{} = data
       ) do
-    for route <- update.nlri do
-      preference = degree_of_preference(session, update, route)
-      RIB.upsert(data.adj_ribs_in, {{session.bgp_id, route}, preference, update.path_attributes})
-    end
-
-    for route <- update.withdrawn_routes do
-      RIB.delete(data.adj_ribs_in, {session.bgp_id, route})
-    end
-
-    Logger.info("#{data.config[:server]}: #{RIB.dump(data.adj_ribs_in) |> Enum.count()} prefixes")
-
-    {:next_state, :idle, data}
+    {
+      :keep_state,
+      %__MODULE__{data | update_queue: :queue.in({session, update}, data.update_queue)},
+      [{:reply, from, :ok}]
+    }
   end
 
   @impl :gen_statem
-  def handle_event({:call, from}, {:process_update, _session, _update}, _state, _data),
-    do: {:keep_state_and_data, [{:reply, from, :ok}, :postpone]}
+  def handle_event(:state_timeout, _event, :idle, data) do
+    Logger.info("RDE idle timeout")
+    {:next_state, :processing, data, {:next_event, :internal, :degree_of_preference}}
+  end
 
-  defp degree_of_preference(%Session{ibgp: true} = session, path_attributes, route) do
+  @impl :gen_statem
+  def handle_event(:internal, :degree_of_preference, :processing, %__MODULE__{} = data) do
+    Logger.info("Calculation of Degree of Preference")
+
+    :queue.fold(
+      fn {session, update}, acc ->
+        for route <- update.nlri do
+          preference = preference(session, update, route)
+
+          RIB.upsert(
+            data.adj_ribs_in,
+            {{session.bgp_id, route}, preference, update.path_attributes}
+          )
+        end
+
+        for route <- update.withdrawn_routes do
+          RIB.delete(data.adj_ribs_in, {session.bgp_id, route})
+        end
+
+        acc
+      end,
+      :ok,
+      data.update_queue
+    )
+
+    Logger.info("exiting Phase 1: Calculation of Degree of Preference")
+
+    {
+      :keep_state,
+      %__MODULE__{data | update_queue: :queue.new()},
+      {:next_event, :internal, :route_selection}
+    }
+  end
+
+  def handle_event(:internal, :route_selection, :processing, data) do
+    Logger.info("entering Phase 2: Route Selection")
+    Logger.info("exiting Phase 2: Route Selection")
+
+    {
+      :keep_state,
+      data,
+      {:next_event, :internal, :route_dissemination}
+    }
+  end
+
+  def handle_event(:internal, :route_dissemination, :processing, data) do
+    Logger.info("entering Phase 3: Route Dissemination")
+    Logger.info("exiting Phase 3: Route Dissemination")
+
+    {:next_state, :idle, data, {:state_timeout, 10_000, nil}}
+  end
+
+  defp preference(%Session{ibgp: true} = session, path_attributes, route) do
     Enum.find_value(path_attributes, pib_preference(session, path_attributes, route), fn
       %Attribute{value: %Attribute.LocalPref{value: value}} -> value
       _attribute -> nil
     end)
   end
 
-  defp degree_of_preference(%Session{ibgp: false} = session, path_attributes, route),
+  defp preference(%Session{ibgp: false} = session, path_attributes, route),
     do: pib_preference(session, path_attributes, route)
 
   defp pib_preference(_session, _path_attributes, _route), do: 0
