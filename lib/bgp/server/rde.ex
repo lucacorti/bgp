@@ -41,7 +41,7 @@ defmodule BGP.Server.RDE do
 
   @spec queue_update(Server.t(), Session.data(), UPDATE.t()) :: :ok
   def queue_update(server, session, update),
-    do: :gen_statem.call(Server.rde_for(server), {:process_update, session, update})
+    do: :gen_statem.call(Server.rde_for(server), {:queue_update, session, update})
 
   @impl :gen_statem
   def callback_mode, do: [:handle_event_function, :state_enter]
