@@ -61,8 +61,8 @@ defmodule BGP.Server.RDE do
   end
 
   @impl :gen_statem
-  def handle_event(:enter, old_state, new_state, _data) do
-    Logger.info("#{old_state} -> #{new_state}")
+  def handle_event(:enter, old_state, new_state, %__MODULE__{} = data) do
+    Logger.info("#{data.config[:server]}: #{old_state} -> #{new_state}")
     :keep_state_and_data
   end
 
@@ -81,14 +81,14 @@ defmodule BGP.Server.RDE do
   end
 
   @impl :gen_statem
-  def handle_event(:state_timeout, _event, :idle, data) do
-    Logger.info("RDE idle timeout")
+  def handle_event(:state_timeout, _event, :idle, %__MODULE__{} = data) do
+    Logger.info("#{data.config[:server]}: RDE idle timeout")
     {:next_state, :processing, data, {:next_event, :internal, :degree_of_preference}}
   end
 
   @impl :gen_statem
   def handle_event(:internal, :degree_of_preference, :processing, %__MODULE__{} = data) do
-    Logger.info("Calculation of Degree of Preference")
+    Logger.info("#{data.config[:server]}: Calculation of Degree of Preference")
 
     :queue.fold(
       fn {session, update}, acc ->
@@ -111,7 +111,7 @@ defmodule BGP.Server.RDE do
       data.update_queue
     )
 
-    Logger.info("exiting Phase 1: Calculation of Degree of Preference")
+    Logger.info("#{data.config[:server]}: exiting Phase 1: Calculation of Degree of Preference")
 
     {
       :keep_state,
@@ -121,8 +121,8 @@ defmodule BGP.Server.RDE do
   end
 
   def handle_event(:internal, :route_selection, :processing, data) do
-    Logger.info("entering Phase 2: Route Selection")
-    Logger.info("exiting Phase 2: Route Selection")
+    Logger.info("#{data.config[:server]}: entering Phase 2: Route Selection")
+    Logger.info("#{data.config[:server]}: exiting Phase 2: Route Selection")
 
     {
       :keep_state,
@@ -132,8 +132,8 @@ defmodule BGP.Server.RDE do
   end
 
   def handle_event(:internal, :route_dissemination, :processing, data) do
-    Logger.info("entering Phase 3: Route Dissemination")
-    Logger.info("exiting Phase 3: Route Dissemination")
+    Logger.info("#{data.config[:server]}: entering Phase 3: Route Dissemination")
+    Logger.info("#{data.config[:server]}: exiting Phase 3: Route Dissemination")
 
     {:next_state, :idle, data, {:state_timeout, 10_000, nil}}
   end
