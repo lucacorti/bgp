@@ -1314,7 +1314,7 @@ defmodule BGP.Server.Session do
   defp compose_as_update(%__MODULE__{} = data) do
     %UPDATE{
       path_attributes: [
-        %Attribute{value: %Origin{origin: :igp}},
+        %Attribute{value: %Origin{value: 0}},
         %Attribute{value: %ASPath{value: [{:as_sequence, 1, [data.asn]}]}},
         %Attribute{value: %NextHop{value: data.bgp_id}}
       ],
