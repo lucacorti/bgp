@@ -25,8 +25,8 @@ defmodule BGP.Server.RDE do
 
   require Logger
 
-  @enforce_keys [:config, :adj_ribs_in, :loc_rib, :update_queue]
-  defstruct [:config, :adj_ribs_in, :loc_rib, :update_queue]
+  @enforce_keys [:config, :adj_ribs_in, :adj_ribs_out, :loc_rib, :update_queue]
+  defstruct [:config, :adj_ribs_in, :adj_ribs_out, :loc_rib, :update_queue]
 
   @spec start_link(Keyword.t()) :: GenServer.on_start()
   def start_link(args),
@@ -55,6 +55,7 @@ defmodule BGP.Server.RDE do
         config: args,
         update_queue: :queue.new(),
         adj_ribs_in: RIB.new(:adj_ribs_in),
+        adj_ribs_out: RIB.new(:adj_ribs_out),
         loc_rib: RIB.new(:loc_rib)
       },
       {:state_timeout, 10_000, nil}
@@ -310,8 +311,9 @@ defmodule BGP.Server.RDE do
     end
   end
 
-  defp route_dissemination(data) do
+  defp route_dissemination(%__MODULE__{} = data) do
     Logger.info("#{data.config[:server]}: entering Phase 3: Route Dissemination")
+    data = %__MODULE__{data | adj_ribs_out: data.loc_rib}
     Logger.info("#{data.config[:server]}: exiting Phase 3: Route Dissemination")
     data
   end
