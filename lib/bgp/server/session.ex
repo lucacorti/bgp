@@ -1,6 +1,6 @@
 defmodule BGP.Server.Session do
   @moduledoc """
-   BGP Session
+  BGP Session
 
   Implementation of BGP peering session handling and the
   [BGP FSM](https://datatracker.ietf.org/doc/html/rfc4271#section-8.2).
@@ -1272,12 +1272,12 @@ defmodule BGP.Server.Session do
 
       %UPDATE{} when hold_time > 0 ->
         Logger.info("#{data.server}: received update from #{data.host}")
-        RDE.process_update(data.server, msg)
+        RDE.queue_update(data.server, data, msg)
         {:keep_state_and_data, [{:next_event, :internal, {:restart_timer, :hold_time, nil}}]}
 
       %UPDATE{} ->
         Logger.info("#{data.server}: received update from #{data.host}")
-        RDE.process_update(data.server, msg)
+        RDE.queue_update(data.server, data, msg)
         :keep_state_and_data
     end
   end
@@ -1314,7 +1314,7 @@ defmodule BGP.Server.Session do
   defp compose_as_update(%__MODULE__{} = data) do
     %UPDATE{
       path_attributes: [
-        %Attribute{value: %Origin{origin: :igp}},
+        %Attribute{value: %Origin{value: 0}},
         %Attribute{value: %ASPath{value: [{:as_sequence, 1, [data.asn]}]}},
         %Attribute{value: %NextHop{value: data.bgp_id}}
       ],

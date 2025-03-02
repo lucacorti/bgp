@@ -87,7 +87,7 @@ defmodule BGP.MessageTest do
     ]
 
     attributes = [
-      %Attribute{transitive: 1, value: %Origin{origin: :igp}},
+      %Attribute{transitive: 1, value: %Origin{value: 0}},
       %Attribute{transitive: 1, value: %ASPath{value: [{:as_sequence, 1, [session.asn]}]}},
       %Attribute{transitive: 1, value: %NextHop{value: session.bgp_id}}
     ]
