@@ -57,21 +57,21 @@ defmodule BGP.Message.OPEN do
   end
 
   defp decode_open(version, asn, hold_time, bgp_id, params, %Session{} = session) do
-    unless version == 4 do
+    if version != 4 do
       raise NOTIFICATION,
         code: :open_message,
         subcode: :unsupported_version_number,
         data: <<version::8>>
     end
 
-    unless hold_time == 0 or hold_time >= @hold_time_min do
+    if !(hold_time == 0 or hold_time >= @hold_time_min) do
       raise NOTIFICATION,
         code: :open_message,
         subcode: :unacceptable_hold_time,
         data: <<hold_time::16>>
     end
 
-    unless asn >= 1 and asn <= @asn_max do
+    if !(asn >= 1 and asn <= @asn_max) do
       raise NOTIFICATION,
         code: :open_message,
         subcode: :bad_peer_as,
