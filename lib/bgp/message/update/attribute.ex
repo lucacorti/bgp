@@ -194,7 +194,7 @@ defmodule BGP.Message.UPDATE.Attribute do
 
       {:optional, :non_transitive} ->
         defp check_flags(
-               :optional_non_transitive,
+               unquote(module),
                1 = _optional,
                0 = _transitive,
                0 = _partial,
