@@ -81,7 +81,7 @@ defmodule BGP.Message.OPEN.Capabilities do
           }, session}
 
   defp decode_capability(65, <<asn::32>>, %__MODULE__{} = capabilities, %Session{} = session) do
-    unless asn >= 1 and asn <= @asn_four_octets_max do
+    if !(asn >= 1 and asn <= @asn_four_octets_max) do
       raise NOTIFICATION,
         code: :open_message,
         subcode: :bad_peer_as,
