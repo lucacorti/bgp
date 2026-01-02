@@ -47,35 +47,40 @@ defmodule BGP.Message.OPEN.Capabilities do
     decode_capabilities(rest, capabilities, session)
   end
 
-  defp decode_capability(1, <<afi::16, _reserved::8, safi::8>>, capabilities, session) do
+  defp decode_capability(
+         1,
+         <<afi::16, _reserved::8, safi::8>>,
+         %__MODULE__{} = capabilities,
+         session
+       ) do
     with {:ok, afi} <- AFN.decode_afi(afi),
          {:ok, safi} <- AFN.decode_safi(safi) do
-      {%__MODULE__{capabilities | multi_protocol: {afi, safi}}, session}
+      {%{capabilities | multi_protocol: {afi, safi}}, session}
     else
       :error ->
         raise NOTIFICATION, code: :open_message
     end
   end
 
-  defp decode_capability(2, <<>>, capabilities, session),
-    do: {%__MODULE__{capabilities | route_refresh: true}, session}
+  defp decode_capability(2, <<>>, %__MODULE__{} = capabilities, session),
+    do: {%{capabilities | route_refresh: true}, session}
 
-  defp decode_capability(6, <<>>, capabilities, session),
-    do: {%__MODULE__{capabilities | extended_message: true}, session}
+  defp decode_capability(6, <<>>, %__MODULE__{} = capabilities, session),
+    do: {%{capabilities | extended_message: true}, session}
 
   defp decode_capability(
          64,
          <<restarted::1, _reserved::3, time::12, afs::binary>>,
-         capabilities,
+         %__MODULE__{} = capabilities,
          session
        ),
        do:
-         {%__MODULE__{
+         {%{
             capabilities
             | graceful_restart: {restarted == 1, time, decode_afs(afs, [])}
           }, session}
 
-  defp decode_capability(65, <<asn::32>>, capabilities, session) do
+  defp decode_capability(65, <<asn::32>>, %__MODULE__{} = capabilities, %Session{} = session) do
     unless asn >= 1 and asn <= @asn_four_octets_max do
       raise NOTIFICATION,
         code: :open_message,
@@ -83,12 +88,12 @@ defmodule BGP.Message.OPEN.Capabilities do
         data: <<asn::size(32)>>
     end
 
-    {%__MODULE__{capabilities | four_octets_asn: true},
-     %Session{session | four_octets: true, ibgp: asn == session.asn}}
+    {%{capabilities | four_octets_asn: true},
+     %{session | four_octets: true, ibgp: asn == session.asn}}
   end
 
-  defp decode_capability(70, <<>>, capabilities, session),
-    do: {%__MODULE__{capabilities | enanched_route_refresh: true}, session}
+  defp decode_capability(70, <<>>, %__MODULE__{} = capabilities, session),
+    do: {%{capabilities | enanched_route_refresh: true}, session}
 
   defp decode_capability(_code, _data, _capabilities, _session) do
     raise NOTIFICATION, code: :open_message
