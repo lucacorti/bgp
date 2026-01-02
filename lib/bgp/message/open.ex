@@ -32,7 +32,7 @@ defmodule BGP.Message.OPEN do
   def decode(
         <<version::8, asn::16, hold_time::16, bgp_id::binary-size(4), _non_ext_params_length::8,
           255::8, length::16, params::binary-size(length)>>,
-        session
+        %Session{} = session
       ) do
     decode_open(
       version,
@@ -40,7 +40,7 @@ defmodule BGP.Message.OPEN do
       hold_time,
       bgp_id,
       params,
-      %Session{session | extended_optional_parameters: true}
+      %{session | extended_optional_parameters: true}
     )
   end
 
@@ -103,20 +103,20 @@ defmodule BGP.Message.OPEN do
 
   defp decode_parameters(
          <<2::8, length::16, parameter::binary-size(length), rest::binary>>,
-         msg,
+         %__MODULE__{} = msg,
          %Session{extended_optional_parameters: true} = session
        ) do
     {capabilities, session} = Capabilities.decode(parameter, session)
-    decode_parameters(rest, %__MODULE__{msg | capabilities: capabilities}, session)
+    decode_parameters(rest, %{msg | capabilities: capabilities}, session)
   end
 
   defp decode_parameters(
          <<2::8, length::8, parameter::binary-size(length), rest::binary>>,
-         msg,
+         %__MODULE__{} = msg,
          session
        ) do
     {capabilities, session} = Capabilities.decode(parameter, session)
-    decode_parameters(rest, %__MODULE__{msg | capabilities: capabilities}, session)
+    decode_parameters(rest, %{msg | capabilities: capabilities}, session)
   end
 
   @impl Encoder
