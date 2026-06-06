@@ -20,7 +20,7 @@ defmodule BGP.Message.UPDATE.Attribute.AS4Path do
 
   defp decode_path(<<type::8, length::8, data::binary>>, path) do
     asns_length = length * 4
-    <<asns::binary-size(asns_length), rest::binary>> = data
+    <<asns::binary-size(^asns_length), rest::binary>> = data
     decode_path(rest, [{decode_type(type), length, decode_asns(asns, [])} | path])
   end
 

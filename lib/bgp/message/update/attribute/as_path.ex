@@ -28,7 +28,7 @@ defmodule BGP.Message.UPDATE.Attribute.ASPath do
          path
        ) do
     asn_size = length * 4
-    <<asns::binary-size(asn_size), rest::binary>> = data
+    <<asns::binary-size(^asn_size), rest::binary>> = data
 
     decode_path(rest, session, [
       {decode_type(type), length, decode_asns(asns, [], session)} | path
@@ -37,7 +37,7 @@ defmodule BGP.Message.UPDATE.Attribute.ASPath do
 
   defp decode_path(<<type::8, length::8, data::binary>>, session, path) do
     asn_size = length * 2
-    <<asns::binary-size(asn_size), rest::binary>> = data
+    <<asns::binary-size(^asn_size), rest::binary>> = data
 
     decode_path(rest, session, [
       {decode_type(type), length, decode_asns(asns, [], session)} | path
