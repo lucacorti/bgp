@@ -58,7 +58,7 @@ defmodule BGP.Message.UPDATE do
   defp decode_attributes(<<header::binary-size(2), data::binary>>, attributes, session) do
     <<_other_flags::3, extended::1, _unused::4, _code::8>> = header
     size = 8 + 8 * extended
-    <<length::size(size), attribute::binary-size(length), rest::binary>> = data
+    <<length::size(^size), attribute::binary-size(length), rest::binary>> = data
 
     {attribute, session} =
       Attribute.decode(<<header::binary, length::size(size), attribute::binary>>, session)
