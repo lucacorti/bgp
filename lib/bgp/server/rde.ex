@@ -110,12 +110,12 @@ defmodule BGP.Server.RDE do
     :queue.fold(
       fn {session, update}, :ok ->
         for prefix <- update.nlri do
-          with {:ok, preference} <- preference(session, update, prefix) do
-            RIB.upsert(
-              data.adj_ribs_in,
-              {{session.bgp_id, prefix}, preference, update.path_attributes}
-            )
-          end
+          preference = preference(session, update, prefix)
+
+          RIB.upsert(
+            data.adj_ribs_in,
+            {{session.bgp_id, prefix}, preference, update.path_attributes}
+          )
         end
 
         for prefix <- update.withdrawn_routes do
@@ -134,21 +134,16 @@ defmodule BGP.Server.RDE do
   end
 
   defp preference(%Session{ibgp: true} = session, path_attributes, route) do
-    with {:ok, preference} <- pib_preference(session, path_attributes, route) do
-      {
-        :ok,
-        Enum.find_value(path_attributes, preference, fn
-          %Attribute{value: %Attribute.LocalPref{value: value}} -> value
-          _attribute -> nil
-        end)
-      }
-    end
+    Enum.find_value(path_attributes, pib_preference(session, path_attributes, route), fn
+      %Attribute{value: %Attribute.LocalPref{value: value}} -> value
+      _attribute -> nil
+    end)
   end
 
   defp preference(%Session{ibgp: false} = session, path_attributes, route),
     do: pib_preference(session, path_attributes, route)
 
-  defp pib_preference(_session, _path_attributes, _route), do: {:ok, 0}
+  defp pib_preference(_session, _path_attributes, _route), do: 0
 
   defp route_selection(%__MODULE__{} = data) do
     Logger.info("#{data.config[:server]}: entering Phase 2: Route Selection")
