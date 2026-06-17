@@ -8,7 +8,6 @@ defmodule BGP.MixProject do
       elixir: "~> 1.16",
       start_permanent: Mix.env() == :prod,
       deps: deps(),
-      dialyzer: dialyzer(),
       docs: docs()
     ]
   end
@@ -26,17 +25,12 @@ defmodule BGP.MixProject do
   defp deps do
     [
       {:credo, "~> 1.0", only: :dev, runtime: false},
-      {:dialyxir, "~> 1.0", only: :dev, runtime: false},
       {:ex_doc, "~> 0.26", only: :dev, runtime: false},
       {:ip, "~> 2.0"},
       {:nimble_options, "~> 1.0"},
       {:telemetry, "~> 1.0"},
       {:thousand_island, "~> 1.0"}
     ]
-  end
-
-  defp dialyzer do
-    [plt_add_apps: [:mix]]
   end
 
   defp docs() do
