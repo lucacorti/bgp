@@ -33,7 +33,7 @@ defmodule BGP.MixProject do
     ]
   end
 
-  defp docs() do
+  defp docs do
     [
       before_closing_body_tag: fn
         :html ->
