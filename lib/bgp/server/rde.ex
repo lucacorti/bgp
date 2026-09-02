@@ -25,8 +25,8 @@ defmodule BGP.Server.RDE do
 
   require Logger
 
-  @enforce_keys [:config, :adj_ribs_in, :adj_ribs_out, :loc_rib, :update_queue]
-  defstruct [:config, :adj_ribs_in, :adj_ribs_out, :loc_rib, :update_queue]
+  @enforce_keys [:config, :adj_ribs_in, :loc_rib, :update_queue]
+  defstruct [:config, :adj_ribs_in, :loc_rib, :update_queue]
 
   @spec start_link(Keyword.t()) :: GenServer.on_start()
   def start_link(args),
@@ -55,7 +55,6 @@ defmodule BGP.Server.RDE do
         config: args,
         update_queue: :queue.new(),
         adj_ribs_in: RIB.new(:adj_ribs_in),
-        adj_ribs_out: RIB.new(:adj_ribs_out),
         loc_rib: RIB.new(:loc_rib)
       },
       {:state_timeout, 10_000, nil}
@@ -98,9 +97,11 @@ defmodule BGP.Server.RDE do
     end
   end
 
+  @impl :gen_statem
   def handle_event(:internal, :route_selection, :processing, %__MODULE__{} = data),
     do: {:keep_state, route_selection(data), {:next_event, :internal, :route_dissemination}}
 
+  @impl :gen_statem
   def handle_event(:internal, :route_dissemination, :processing, data),
     do: {:next_state, :idle, route_dissemination(data), {:state_timeout, 10_000, nil}}
 
@@ -108,9 +109,9 @@ defmodule BGP.Server.RDE do
     Logger.info("#{data.config[:server]}: entering Phase 1: Calculation of Degree of Preference")
 
     :queue.fold(
-      fn {session, update}, :ok ->
+      fn {%Session{} = session, %UPDATE{} = update}, :ok ->
         for prefix <- update.nlri do
-          preference = preference(session, update, prefix)
+          preference = preference(session, update.path_attributes, prefix)
 
           RIB.upsert(
             data.adj_ribs_in,
@@ -308,8 +309,13 @@ defmodule BGP.Server.RDE do
 
   defp route_dissemination(%__MODULE__{} = data) do
     Logger.info("#{data.config[:server]}: entering Phase 3: Route Dissemination")
-    data = %__MODULE__{data | adj_ribs_out: data.loc_rib}
+
+    for {_host, session, _value} <- Server.active_sessions(data.config[:server]) do
+      Session.disseminate(session, data.loc_rib)
+    end
+
     Logger.info("#{data.config[:server]}: exiting Phase 3: Route Dissemination")
+
     data
   end
 end
