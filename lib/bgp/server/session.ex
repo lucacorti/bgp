@@ -262,7 +262,9 @@ defmodule BGP.Server.Session do
           )
 
         ThousandIsland.Telemetry.span_event(connection_span, :ready)
-        socket = ThousandIsland.Socket.new(raw_socket, server_config, connection_span)
+
+        socket =
+          ThousandIsland.Socket.new(raw_socket, {address, port}, server_config, connection_span)
 
         with {:ok, host} <- IP.Address.from_tuple(address),
              {:ok, peer} <- Server.get_peer(data.server, host),
