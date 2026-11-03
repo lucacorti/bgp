@@ -88,8 +88,7 @@ defmodule BGP.Message.OPEN.Capabilities do
         data: <<asn::size(32)>>
     end
 
-    {%{capabilities | four_octets_asn: true},
-     %{session | four_octets: true, ibgp: asn == session.asn}}
+    {%{capabilities | four_octets_asn: true}, %{session | four_octets: true}}
   end
 
   defp decode_capability(70, <<>>, %__MODULE__{} = capabilities, session),

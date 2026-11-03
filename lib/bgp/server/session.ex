@@ -1,6 +1,6 @@
 defmodule BGP.Server.Session do
   @moduledoc """
-   BGP Session
+  BGP Session
 
   Implementation of BGP peering session handling and the
   [BGP FSM](https://datatracker.ietf.org/doc/html/rfc4271#section-8.2).
@@ -43,6 +43,7 @@ defmodule BGP.Server.Session do
   alias BGP.Message.UPDATE.Attribute
   alias BGP.Message.UPDATE.Attribute.{ASPath, NextHop, Origin}
   alias BGP.Server.RDE
+  alias BGP.Server.RDE.RIB
   alias BGP.Server.Session.{Timer, Transport}
 
   alias ThousandIsland.Socket
@@ -125,6 +126,9 @@ defmodule BGP.Server.Session do
     end
   end
 
+  @spec disseminate(t(), RIB.t()) :: :ok
+  def disseminate(session, rib), do: :gen_statem.call(session, {:disseminate, rib})
+
   @spec manual_start(t()) :: :ok | {:error, :already_started}
   def manual_start(session), do: :gen_statem.call(session, {:start, :manual})
 
@@ -173,6 +177,7 @@ defmodule BGP.Server.Session do
     :keep_state_and_data
   end
 
+  @impl :gen_statem
   def handle_event(:internal, {:tcp_connection, :connect}, _state, %__MODULE__{} = data) do
     case data.transport.connect(data) do
       {:ok, socket} ->
@@ -191,6 +196,7 @@ defmodule BGP.Server.Session do
     end
   end
 
+  @impl :gen_statem
   def handle_event(:internal, {:tcp_connection, :disconnect}, _state, %__MODULE__{} = data) do
     data.transport.close(data)
     Logger.error("#{data.server}: connection to peer #{data.host} closed")
@@ -202,6 +208,7 @@ defmodule BGP.Server.Session do
     }
   end
 
+  @impl :gen_statem
   def handle_event(:internal, {:send, msg}, _state, %__MODULE__{} = data) do
     case data.transport.send(data, msg) do
       {:ok, data} ->
@@ -214,11 +221,13 @@ defmodule BGP.Server.Session do
     end
   end
 
+  @impl :gen_statem
   def handle_event(:info, {:tcp_closed, _port}, _state, %__MODULE__{} = data) do
     Logger.error("#{data.server}: connection closed by peer #{data.host}")
     {:keep_state, %{data | socket: nil}, [{:next_event, :internal, {:tcp_connection, :fails}}]}
   end
 
+  @impl :gen_statem
   def handle_event(:info, {:tcp, socket, tcp_data}, _state, %__MODULE__{} = data) do
     {actions, data} =
       (data.buffer <> tcp_data)
@@ -245,6 +254,7 @@ defmodule BGP.Server.Session do
     :inet.setopts(socket, active: :once)
   end
 
+  @impl :gen_statem
   def handle_event(
         :info,
         {:thousand_island_ready, raw_socket, server_config, acceptor_span, start_time},
@@ -291,6 +301,7 @@ defmodule BGP.Server.Session do
     {:stop, _, _} -> {:stop, :normal}
   end
 
+  @impl :gen_statem
   def handle_event(:internal, {:increment_counter, counter}, _state, %__MODULE__{} = data) do
     {
       :keep_state,
@@ -298,6 +309,7 @@ defmodule BGP.Server.Session do
     }
   end
 
+  @impl :gen_statem
   def handle_event(:internal, {:zero_counter, counter}, _state, %__MODULE__{} = data) do
     {
       :keep_state,
@@ -305,6 +317,7 @@ defmodule BGP.Server.Session do
     }
   end
 
+  @impl :gen_statem
   def handle_event(:internal, {:set_timer, timer, value}, _state, %__MODULE__{} = data) do
     {
       :keep_state,
@@ -312,6 +325,7 @@ defmodule BGP.Server.Session do
     }
   end
 
+  @impl :gen_statem
   def handle_event(:internal, {:restart_timer, timer, value}, _state, %__MODULE__{} = data) do
     new_timer =
       get_in(data.timers, [timer])
@@ -327,6 +341,7 @@ defmodule BGP.Server.Session do
     }
   end
 
+  @impl :gen_statem
   def handle_event(:internal, {:stop_timer, timer}, _state, %__MODULE__{} = data) do
     {
       :keep_state,
@@ -335,9 +350,11 @@ defmodule BGP.Server.Session do
     }
   end
 
+  @impl :gen_statem
   def handle_event({:call, from}, {:check_collision, _peer_bgp_id}, :established, _data),
     do: {:keep_state_and_data, [{:reply, from, {:error, :collision}}]}
 
+  @impl :gen_statem
   def handle_event(
         {:call, from},
         {:check_collision, peer_bgp_id},
@@ -347,14 +364,29 @@ defmodule BGP.Server.Session do
       when state in [:open_confirm, :open_sent] and data.bgp_id > peer_bgp_id,
       do: {:keep_state_and_data, [{:reply, from, {:error, :collision}}]}
 
+  @impl :gen_statem
   def handle_event({:call, from}, {:check_collision, _peer_bgp_id}, state, %__MODULE__{})
       when state in [:open_confirm, :open_sent] do
     {:keep_state_and_data, [{:reply, from, :ok}, {:next_event, :internal, :open_collision_dump}]}
   end
 
+  @impl :gen_statem
   def handle_event({:call, from}, {:check_collision, _peer_bgp_id}, _state, _data),
     do: {:keep_state_and_data, [{:reply, from, :ok}]}
 
+  @impl :gen_statem
+  def handle_event({:call, from}, {:disseminate, rib}, :established, %__MODULE__{} = data) do
+    Logger.info("#{data.server}: peer #{data.host}: disseminating: #{inspect(RIB.dump(rib))}")
+    {:keep_state, data, [{:reply, from, :ok}]}
+  end
+
+  @impl :gen_statem
+  def handle_event({:call, from}, {:disseminate, _rib}, _state, %__MODULE__{} = data) do
+    Logger.info("#{data.server}: peer #{data.host}: not disseminating, session not established")
+    {:keep_state_and_data, [{:reply, from, :ok}]}
+  end
+
+  @impl :gen_statem
   def handle_event({:call, {pid, _} = from}, {:process_connect}, _state, %__MODULE__{} = data) do
     case Server.get_peer(data.server, data.host) do
       {:ok, peer} ->
@@ -374,13 +406,16 @@ defmodule BGP.Server.Session do
     end
   end
 
+  @impl :gen_statem
   def handle_event({:call, from}, {:process_disconnect}, _state, _data) do
     {:stop_and_reply, [{:reply, from, :ok}]}
   end
 
+  @impl :gen_statem
   def handle_event(:cast, {:process_recv, msg}, _state, _data),
     do: {:keep_state_and_data, [{:next_event, :internal, {:recv, msg}}]}
 
+  @impl :gen_statem
   def handle_event(:internal, :detect_collision, _state, %__MODULE__{} = data) do
     with {:ok, session} <- Server.session_for(data.server, data.host),
          :ok <- check_collision(session, data.bgp_id) do
@@ -400,9 +435,11 @@ defmodule BGP.Server.Session do
     end
   end
 
+  @impl :gen_statem
   def handle_event({:call, from}, {:stop, _type}, :idle, _data),
     do: {:keep_state_and_data, [{:reply, from, :ok}]}
 
+  @impl :gen_statem
   def handle_event(:internal, {:start, :automatic, :active}, :idle, data) do
     {
       :next_state,
@@ -416,6 +453,7 @@ defmodule BGP.Server.Session do
     }
   end
 
+  @impl :gen_statem
   def handle_event({:call, from}, {:start, :manual, :active}, :idle, data) do
     {
       :next_state,
@@ -430,6 +468,7 @@ defmodule BGP.Server.Session do
     }
   end
 
+  @impl :gen_statem
   def handle_event(:internal, {:start, :automatic, :passive}, :idle, data) do
     {
       :next_state,
@@ -442,6 +481,7 @@ defmodule BGP.Server.Session do
     }
   end
 
+  @impl :gen_statem
   def handle_event({:call, from}, {:start, :manual, :passive}, :idle, data) do
     {
       :next_state,
@@ -455,10 +495,13 @@ defmodule BGP.Server.Session do
     }
   end
 
+  @impl :gen_statem
   def handle_event(_event_type, _event, :idle, _data), do: :keep_state_and_data
 
+  @impl :gen_statem
   def handle_event(_event_type, {:start, _type, _mode}, :connect, _data), do: :keep_state_and_data
 
+  @impl :gen_statem
   def handle_event({:call, from}, {:stop, :manual}, :connect, data) do
     {
       :next_state,
@@ -474,6 +517,7 @@ defmodule BGP.Server.Session do
     }
   end
 
+  @impl :gen_statem
   def handle_event({:timeout, :connect_retry}, _event, :connect, _data) do
     {
       :keep_state_and_data,
@@ -486,6 +530,7 @@ defmodule BGP.Server.Session do
     }
   end
 
+  @impl :gen_statem
   def handle_event({:timeout, :delay_open}, _event, :connect, data) do
     {
       :next_state,
@@ -498,8 +543,10 @@ defmodule BGP.Server.Session do
     }
   end
 
+  @impl :gen_statem
   def handle_event(:internal, {:stop, reason}, _state, _data), do: {:stop, reason}
 
+  @impl :gen_statem
   def handle_event(:internal, {:tcp_connection, event}, :connect, data)
       when event in [:confirmed, :request_acked] do
     if timer_enabled?(data, :delay_open) do
@@ -524,6 +571,7 @@ defmodule BGP.Server.Session do
     end
   end
 
+  @impl :gen_statem
   def handle_event(:internal, {:tcp_connection, :fails}, :connect, data) do
     if timer_running?(data, :delay_open) do
       {
@@ -548,6 +596,7 @@ defmodule BGP.Server.Session do
     end
   end
 
+  @impl :gen_statem
   def handle_event(:internal, {:recv, msg}, :connect, data) do
     delay_open_timer_running = timer_running?(data, :delay_open)
 
@@ -614,6 +663,7 @@ defmodule BGP.Server.Session do
     end
   end
 
+  @impl :gen_statem
   def handle_event(_type, _event, :connect, data) do
     {
       :next_state,
@@ -629,8 +679,10 @@ defmodule BGP.Server.Session do
     }
   end
 
+  @impl :gen_statem
   def handle_event(:internal, {:start, _type, _mode}, :active, _data), do: :keep_state_and_data
 
+  @impl :gen_statem
   def handle_event(
         {:call, from},
         {:stop, :manual},
@@ -669,6 +721,7 @@ defmodule BGP.Server.Session do
     end
   end
 
+  @impl :gen_statem
   def handle_event({:call, from}, {:stop, :manual}, :active, data) do
     {
       :next_state,
@@ -685,6 +738,7 @@ defmodule BGP.Server.Session do
     }
   end
 
+  @impl :gen_statem
   def handle_event({:timeout, :connect_retry}, _event, :active, data) do
     {
       :next_state,
@@ -694,6 +748,7 @@ defmodule BGP.Server.Session do
     }
   end
 
+  @impl :gen_statem
   def handle_event({:timeout, :delay_open}, _event, :active, data) do
     {
       :next_state,
@@ -709,6 +764,7 @@ defmodule BGP.Server.Session do
     }
   end
 
+  @impl :gen_statem
   def handle_event(:internal, {:tcp_connection, event}, :active, data)
       when event in [:confirmed, :request_acked] do
     if timer_enabled?(data, :delay_open) do
@@ -734,6 +790,7 @@ defmodule BGP.Server.Session do
     end
   end
 
+  @impl :gen_statem
   def handle_event(:internal, {:tcp_connection, :fails}, :active, data) do
     {
       :next_state,
@@ -748,6 +805,7 @@ defmodule BGP.Server.Session do
     }
   end
 
+  @impl :gen_statem
   def handle_event(:internal, {:recv, msg}, :active, data) do
     delay_open_timer_running = timer_running?(data, :delay_open)
 
@@ -813,6 +871,7 @@ defmodule BGP.Server.Session do
     end
   end
 
+  @impl :gen_statem
   def handle_event(_type, _event, :active, data) do
     {
       :next_state,
@@ -826,9 +885,11 @@ defmodule BGP.Server.Session do
     }
   end
 
+  @impl :gen_statem
   def handle_event({:call, from}, {:start, _type, _mode}, :open_sent, _data),
     do: {:keep_state_and_data, [{:reply, from, :ok}]}
 
+  @impl :gen_statem
   def handle_event({:call, from}, {:stop, :manual}, :open_sent, data) do
     {
       :next_state,
@@ -843,6 +904,7 @@ defmodule BGP.Server.Session do
     }
   end
 
+  @impl :gen_statem
   def handle_event({:call, from}, {:stop, :automatic}, :open_sent, data) do
     {
       :next_state,
@@ -858,6 +920,7 @@ defmodule BGP.Server.Session do
     }
   end
 
+  @impl :gen_statem
   def handle_event({:timeout, :hold_time}, _event, :open_sent, data) do
     {
       :next_state,
@@ -872,6 +935,7 @@ defmodule BGP.Server.Session do
     }
   end
 
+  @impl :gen_statem
   def handle_event(:internal, {:tcp_connection, :fails}, :open_sent, %__MODULE__{} = data) do
     {
       :next_state,
@@ -884,6 +948,7 @@ defmodule BGP.Server.Session do
     }
   end
 
+  @impl :gen_statem
   def handle_event(:internal, :open_collision_dump, :open_sent, data) do
     {
       :next_state,
@@ -899,6 +964,7 @@ defmodule BGP.Server.Session do
     }
   end
 
+  @impl :gen_statem
   def handle_event(:internal, {:recv, msg}, :open_sent, data) do
     case msg do
       %OPEN{} = open when open.hold_time > 0 ->
@@ -943,6 +1009,7 @@ defmodule BGP.Server.Session do
     end
   end
 
+  @impl :gen_statem
   def handle_event(_type, _event, :open_sent, data) do
     {
       :next_state,
@@ -957,9 +1024,11 @@ defmodule BGP.Server.Session do
     }
   end
 
+  @impl :gen_statem
   def handle_event({:call, from}, {:start, _type, _mode}, :open_confirm, _data),
     do: {:keep_state_and_data, [{:reply, from, :ok}]}
 
+  @impl :gen_statem
   def handle_event({:call, from}, {:stop, :manual}, :open_confirm, data) do
     {
       :next_state,
@@ -975,6 +1044,7 @@ defmodule BGP.Server.Session do
     }
   end
 
+  @impl :gen_statem
   def handle_event({:call, from}, {:stop, :automatic}, :open_confirm, data) do
     {
       :next_state,
@@ -990,6 +1060,7 @@ defmodule BGP.Server.Session do
     }
   end
 
+  @impl :gen_statem
   def handle_event({:timeout, :hold_time}, _event, :open_confirm, data) do
     {
       :next_state,
@@ -1004,6 +1075,7 @@ defmodule BGP.Server.Session do
     }
   end
 
+  @impl :gen_statem
   def handle_event({:timeout, :keep_alive}, _event, :open_confirm, _data) do
     {
       :keep_state_and_data,
@@ -1014,6 +1086,7 @@ defmodule BGP.Server.Session do
     }
   end
 
+  @impl :gen_statem
   def handle_event(:internal, {:tcp_connection, :fails}, :open_confirm, data) do
     {
       :next_state,
@@ -1027,6 +1100,7 @@ defmodule BGP.Server.Session do
     }
   end
 
+  @impl :gen_statem
   def handle_event(
         :internal,
         {:recv, %NOTIFICATION{code: :unsupported_version_number}},
@@ -1044,6 +1118,7 @@ defmodule BGP.Server.Session do
     }
   end
 
+  @impl :gen_statem
   def handle_event(:internal, :open_collision_dump, :open_confirm, data) do
     {
       :next_state,
@@ -1059,6 +1134,7 @@ defmodule BGP.Server.Session do
     }
   end
 
+  @impl :gen_statem
   def handle_event(:internal, {:recv, msg}, :open_confirm, %__MODULE__{} = data) do
     case msg do
       %NOTIFICATION{} ->
@@ -1101,6 +1177,7 @@ defmodule BGP.Server.Session do
     end
   end
 
+  @impl :gen_statem
   def handle_event(_type, _event, :open_confirm, data) do
     {
       :next_state,
@@ -1115,9 +1192,11 @@ defmodule BGP.Server.Session do
     }
   end
 
+  @impl :gen_statem
   def handle_event({:call, from}, {:start, _type, _mode}, :established, _data),
     do: {:keep_state_and_data, [{:reply, from, :ok}]}
 
+  @impl :gen_statem
   def handle_event({:call, from}, {:stop, :manual}, :established, data) do
     {
       :next_state,
@@ -1135,6 +1214,7 @@ defmodule BGP.Server.Session do
     }
   end
 
+  @impl :gen_statem
   def handle_event({:call, from}, {:stop, :automatic}, :established, data) do
     {
       :next_state,
@@ -1152,6 +1232,7 @@ defmodule BGP.Server.Session do
     }
   end
 
+  @impl :gen_statem
   def handle_event({:timeout, :as_origination}, _event, :established, data) do
     {
       :keep_state_and_data,
@@ -1162,6 +1243,7 @@ defmodule BGP.Server.Session do
     }
   end
 
+  @impl :gen_statem
   def handle_event({:timeout, :hold_time}, _event, :established, data) do
     {
       :next_state,
@@ -1178,6 +1260,7 @@ defmodule BGP.Server.Session do
     }
   end
 
+  @impl :gen_statem
   def handle_event({:timeout, :keep_alive}, _event, :established, %__MODULE__{} = data) do
     if timer_seconds(data, :hold_time) > 0 do
       {
@@ -1192,13 +1275,18 @@ defmodule BGP.Server.Session do
     end
   end
 
-  def handle_event({:timeout, :route_advertisement}, _event, :established, _data) do
+  @impl :gen_statem
+  def handle_event({:timeout, :route_advertisement}, _event, :established, data) do
     {
       :keep_state_and_data,
-      [{:next_event, :internal, {:restart_timer, :route_advertisement, nil}}]
+      [
+        {:next_event, :internal, {:restart_timer, :route_advertisement, nil}},
+        {:next_event, :internal, {:send, compose_rde_update(data)}}
+      ]
     }
   end
 
+  @impl :gen_statem
   def handle_event(:internal, {:tcp_connection, :fails}, :established, data) do
     {
       :next_state,
@@ -1214,6 +1302,7 @@ defmodule BGP.Server.Session do
     }
   end
 
+  @impl :gen_statem
   def handle_event(:internal, :open_collision_dump, :established, data) do
     {
       :next_state,
@@ -1230,6 +1319,7 @@ defmodule BGP.Server.Session do
     }
   end
 
+  @impl :gen_statem
   def handle_event(:internal, {:recv, msg}, :established, %__MODULE__{} = data) do
     hold_time = timer_seconds(data, :hold_time)
 
@@ -1274,16 +1364,17 @@ defmodule BGP.Server.Session do
 
       %UPDATE{} when hold_time > 0 ->
         Logger.info("#{data.server}: received update from #{data.host}")
-        RDE.process_update(data.server, msg)
+        RDE.queue_update(data.server, data, msg)
         {:keep_state_and_data, [{:next_event, :internal, {:restart_timer, :hold_time, nil}}]}
 
       %UPDATE{} ->
         Logger.info("#{data.server}: received update from #{data.host}")
-        RDE.process_update(data.server, msg)
+        RDE.queue_update(data.server, data, msg)
         :keep_state_and_data
     end
   end
 
+  @impl :gen_statem
   def handle_event(_type, _event, :established, data) do
     {
       :next_state,
@@ -1316,7 +1407,18 @@ defmodule BGP.Server.Session do
   defp compose_as_update(%__MODULE__{} = data) do
     %UPDATE{
       path_attributes: [
-        %Attribute{value: %Origin{origin: :igp}},
+        %Attribute{value: %Origin{value: 0}},
+        %Attribute{value: %ASPath{value: [{:as_sequence, 1, [data.asn]}]}},
+        %Attribute{value: %NextHop{value: data.bgp_id}}
+      ],
+      nlri: data.networks
+    }
+  end
+
+  defp compose_rde_update(%__MODULE__{} = data) do
+    %UPDATE{
+      path_attributes: [
+        %Attribute{value: %Origin{value: 0}},
         %Attribute{value: %ASPath{value: [{:as_sequence, 1, [data.asn]}]}},
         %Attribute{value: %NextHop{value: data.bgp_id}}
       ],
@@ -1326,11 +1428,13 @@ defmodule BGP.Server.Session do
 
   defp setup_session(peer) do
     server = Server.get_config(peer[:server])
+    ibgp = server[:asn] == peer[:asn]
 
     %__MODULE__{
       asn: server[:asn],
       bgp_id: server[:bgp_id],
       host: peer[:host],
+      ibgp: ibgp,
       mode: peer[:mode],
       networks: server[:networks],
       notification_without_open: peer[:notification_without_open],
@@ -1348,11 +1452,16 @@ defmodule BGP.Server.Session do
             :route_advertisement
           ],
           %{},
-          &{&1, Timer.new(get_in(peer, [&1, :seconds]), get_in(peer, [&1, :enabled?]) != false)}
+          &{&1, timer_init(&1, ibgp, peer)}
         ),
       transport: peer[:transport],
       transport_opts: peer[:transport_opts]
     }
+  end
+
+  defp timer_init(timer, ibgp, peer) do
+    seconds = if ibgp, do: :ibgp_seconds, else: :seconds
+    Timer.new(get_in(peer, [timer, seconds]), get_in(peer, [timer, :enabled?]) != false)
   end
 
   defp timer_enabled?(%__MODULE__{} = data, timer),
