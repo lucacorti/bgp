@@ -147,6 +147,16 @@ defmodule BGP.Server do
                    type: {:custom, IP.Address, :from_string, []},
                    required: true
                  ],
+                 rde: [
+                   type: :keyword_list,
+                   keys: [
+                     interval: [
+                       doc: "Interval between Decision Process runs, in seconds.",
+                       type: :pos_integer
+                     ]
+                   ],
+                   default: [interval: 10_000]
+                 ],
                  networks: [
                    doc: "Server AS Networks to announce to peers",
                    type: {:list, {:custom, IP.Prefix, :from_string, []}},
@@ -207,7 +217,10 @@ defmodule BGP.Server do
     Supervisor.init(
       [
         {Registry, keys: :unique, name: session_registry(args[:server])},
-        {BGP.Server.RDE, server: args[:server]},
+        {
+          BGP.Server.RDE,
+          server: args[:server], asn: args[:asn], interval: args[:rde][:interval]
+        },
         {BGP.Server.Session.Supervisor, args[:server]},
         {
           ThousandIsland,

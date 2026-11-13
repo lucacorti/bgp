@@ -11,15 +11,15 @@ defmodule BGP.Message.UPDATE.Attribute.Origin do
   @behaviour Encoder
 
   @impl Encoder
-  def decode(<<value::8>>, session) when value in 0..2, do: {%__MODULE__{value: value}, session}
+  def decode(<<value::8>>, _session) when value in 0..2, do: %__MODULE__{value: value}
 
   def decode(_data, _session) do
     raise NOTIFICATION, code: :update_message, subcode: :invalid_origin_attribute
   end
 
   @impl Encoder
-  def encode(%__MODULE__{value: value}, session) when value in 0..2,
-    do: {<<value::8>>, 1, session}
+  def encode(%__MODULE__{value: value}, _session) when value in 0..2,
+    do: {<<value::8>>, 1}
 
   def encode(_data, _session) do
     raise NOTIFICATION, code: :update_message, subcode: :invalid_origin_attribute

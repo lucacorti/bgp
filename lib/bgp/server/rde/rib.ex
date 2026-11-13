@@ -16,6 +16,9 @@ defmodule BGP.Server.RDE.RIB do
   @spec delete(t(), key()) :: true
   def delete(table, key), do: :ets.delete(table, key)
 
+  @spec match_delete(t(), :ets.match_pattern()) :: true
+  def match_delete(table, pattern), do: :ets.match_delete(table, pattern)
+
   @spec dump(t()) :: [entry()]
   def dump(table), do: :ets.tab2list(table)
 

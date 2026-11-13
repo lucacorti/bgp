@@ -9,12 +9,12 @@ defmodule BGP.Message.KEEPALIVE do
   @behaviour Encoder
 
   @impl Encoder
-  def decode(<<>>, session), do: {%__MODULE__{}, session}
+  def decode(<<>>, _session), do: %__MODULE__{}
 
   def decode(_keepalive, _session) do
     raise NOTIFICATION, code: :message_header, subcode: :bad_message_length
   end
 
   @impl Encoder
-  def encode(_keepalive, session), do: {<<>>, 0, session}
+  def encode(_keepalive, _session), do: {<<>>, 0}
 end

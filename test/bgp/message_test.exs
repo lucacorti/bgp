@@ -7,7 +7,6 @@ defmodule BGP.MessageTest do
   alias BGP.Message.UPDATE.Attribute
   alias BGP.Message.UPDATE.Attribute.{ASPath, NextHop, Origin}
   alias BGP.Server.Session
-  alias BGP.Server.Session.Transport.TCP
 
   import IP.Sigil
 
@@ -22,17 +21,15 @@ defmodule BGP.MessageTest do
         port: 179,
         start: :manual,
         server: nil,
-        transport: TCP,
+        transport: BGP.Server.Session.Transport.TCP,
         transport_opts: []
       }
     }
   end
 
   test "KEEPALIVE encode and decode", %{session: session} do
-    assert {iodata, session} = Message.encode(%KEEPALIVE{}, session)
-
-    assert {%KEEPALIVE{}, _session} =
-             iodata
+    assert %KEEPALIVE{} =
+             Message.encode(%KEEPALIVE{}, session)
              |> IO.iodata_to_binary()
              |> Message.decode(session)
   end
@@ -42,13 +39,10 @@ defmodule BGP.MessageTest do
     subcode = :unspecific
     data = <<>>
 
-    assert {iodata, session} =
-             BGP.Message.encode(%NOTIFICATION{code: code, subcode: subcode, data: data}, session)
-
-    assert {%NOTIFICATION{code: ^code, subcode: ^subcode, data: ^data}, _session} =
-             iodata
+    assert %NOTIFICATION{code: ^code, subcode: ^subcode, data: ^data} =
+             Message.encode(%NOTIFICATION{code: code, subcode: subcode, data: data}, session)
              |> IO.iodata_to_binary()
-             |> BGP.Message.decode(session)
+             |> Message.decode(session)
   end
 
   test "OPEN encode and decode", %{
@@ -57,16 +51,30 @@ defmodule BGP.MessageTest do
     hold_time = 90
     capabilities = %Capabilities{}
 
-    assert {iodata, session} =
-             BGP.Message.encode(
+    assert %OPEN{asn: ^asn, bgp_id: ^bgp_id, hold_time: ^hold_time} =
+             Message.encode(
                %OPEN{asn: asn, bgp_id: bgp_id, hold_time: hold_time, capabilities: capabilities},
                session
              )
-
-    assert {%OPEN{asn: ^asn, bgp_id: ^bgp_id, hold_time: ^hold_time}, _session} =
-             iodata
              |> IO.iodata_to_binary()
-             |> BGP.Message.decode(session)
+             |> Message.decode(session)
+  end
+
+  test "OPEN decode returns capabilities without touching the session", %{
+    session: %Session{asn: asn, bgp_id: bgp_id} = session
+  } do
+    capabilities = %Capabilities{four_octets_asn: true, extended_message: true}
+
+    assert %OPEN{capabilities: %Capabilities{four_octets_asn: true, extended_message: true}} =
+             Message.encode(
+               %OPEN{asn: asn, bgp_id: bgp_id, hold_time: 90, capabilities: capabilities},
+               session
+             )
+             |> IO.iodata_to_binary()
+             |> Message.decode(session)
+
+    refute session.four_octets
+    refute session.extended_message
   end
 
   test "UPDATE encode and decode", %{session: %Session{} = session} do
@@ -92,16 +100,14 @@ defmodule BGP.MessageTest do
       %Attribute{transitive: 1, value: %NextHop{value: session.bgp_id}}
     ]
 
-    assert {iodata, session} =
-             BGP.Message.encode(
+    assert %UPDATE{} =
+             update =
+             Message.encode(
                %UPDATE{withdrawn_routes: withdrawn, path_attributes: attributes, nlri: nlri},
                session
              )
-
-    assert {%UPDATE{} = update, _session} =
-             iodata
              |> IO.iodata_to_binary()
-             |> BGP.Message.decode(session)
+             |> Message.decode(session)
 
     assert update.withdrawn_routes == withdrawn
     assert update.path_attributes == attributes

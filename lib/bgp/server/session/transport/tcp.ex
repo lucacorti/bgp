@@ -21,14 +21,12 @@ defmodule BGP.Server.Session.Transport.TCP do
 
   @impl Transport
   def send(%Session{socket: %Socket{}} = data, msg) do
-    {msg_data, data} = Message.encode(msg, data)
-    with :ok <- Socket.send(data.socket, msg_data), do: {:ok, data}
+    with :ok <- Socket.send(data.socket, Message.encode(msg, data)), do: {:ok, data}
   end
 
   @impl Transport
   def send(%Session{} = data, msg) do
-    {msg_data, data} = Message.encode(msg, data)
-    with :ok <- :gen_tcp.send(data.socket, msg_data), do: {:ok, data}
+    with :ok <- :gen_tcp.send(data.socket, Message.encode(msg, data)), do: {:ok, data}
   catch
     type, error ->
       {:error, {type, error}}

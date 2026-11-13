@@ -11,10 +11,10 @@ defmodule BGP.Message.UPDATE.Attribute.NextHop do
   @behaviour Encoder
 
   @impl Encoder
-  def decode(address, session) do
+  def decode(address, _session) do
     case Message.decode_address(address) do
       {:ok, address} ->
-        {%__MODULE__{value: address}, session}
+        %__MODULE__{value: address}
 
       {:error, data} ->
         raise NOTIFICATION, code: :update_message, subcode: :invalid_nexthop_attribute, data: data
@@ -22,8 +22,8 @@ defmodule BGP.Message.UPDATE.Attribute.NextHop do
   end
 
   @impl Encoder
-  def encode(%__MODULE__{value: value}, session) do
+  def encode(%__MODULE__{value: value}, _session) do
     {encoded, 32} = Message.encode_address(value)
-    {encoded, 4, session}
+    {encoded, 4}
   end
 end

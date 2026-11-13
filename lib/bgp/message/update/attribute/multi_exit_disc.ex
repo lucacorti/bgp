@@ -11,13 +11,13 @@ defmodule BGP.Message.UPDATE.Attribute.MultiExitDisc do
   @behaviour Encoder
 
   @impl Encoder
-  def decode(<<multi_exit_disc::32>>, session), do: {%__MODULE__{value: multi_exit_disc}, session}
+  def decode(<<multi_exit_disc::32>>, _session), do: %__MODULE__{value: multi_exit_disc}
 
-  def decode(_data) do
+  def decode(_data, _session) do
     raise NOTIFICATION, code: :update_message, subcode: :malformed_attribute_list
   end
 
   @impl Encoder
-  def encode(%__MODULE__{value: multi_exit_disc}, session),
-    do: {<<multi_exit_disc::32>>, 4, session}
+  def encode(%__MODULE__{value: multi_exit_disc}, _session),
+    do: {<<multi_exit_disc::32>>, 4}
 end

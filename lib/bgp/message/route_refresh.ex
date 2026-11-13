@@ -11,14 +11,11 @@ defmodule BGP.Message.ROUTEREFRESH do
   @behaviour Encoder
 
   @impl Encoder
-  def decode(<<afi::16, subtype::8, safi::8>>, session) do
-    {
-      %__MODULE__{
-        afi: decode_afi(afi),
-        safi: decode_safi(safi),
-        subtype: decode_subtype(subtype)
-      },
-      session
+  def decode(<<afi::16, subtype::8, safi::8>>, _session) do
+    %__MODULE__{
+      afi: decode_afi(afi),
+      safi: decode_safi(safi),
+      subtype: decode_subtype(subtype)
     }
   end
 
@@ -45,11 +42,10 @@ defmodule BGP.Message.ROUTEREFRESH do
   end
 
   @impl Encoder
-  def encode(%__MODULE__{afi: afi, safi: safi, subtype: subtype}, session) do
+  def encode(%__MODULE__{afi: afi, safi: safi, subtype: subtype}, _session) do
     {
       [<<encode_afi(afi)::16, encode_subtype(subtype)::8, encode_safi(safi)::8>>],
-      4,
-      session
+      4
     }
   end
 

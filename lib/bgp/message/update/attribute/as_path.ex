@@ -16,9 +16,7 @@ defmodule BGP.Message.UPDATE.Attribute.ASPath do
   @behaviour Encoder
 
   @impl Encoder
-  def decode(data, session) do
-    {%__MODULE__{value: decode_path(data, session, [])}, session}
-  end
+  def decode(data, session), do: %__MODULE__{value: decode_path(data, session, [])}
 
   defp decode_path(<<>>, _session, path), do: Enum.reverse(path)
 
@@ -64,7 +62,7 @@ defmodule BGP.Message.UPDATE.Attribute.ASPath do
   @impl Encoder
   def encode(%__MODULE__{value: value}, %Session{} = session) do
     {data, length} = encode_path(value, session)
-    {data, length, session}
+    {data, length}
   end
 
   defp encode_path(path, session) do

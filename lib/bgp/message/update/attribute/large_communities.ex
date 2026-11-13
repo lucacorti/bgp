@@ -12,8 +12,8 @@ defmodule BGP.Message.UPDATE.Attribute.LargeCommunities do
   @behaviour Encoder
 
   @impl Encoder
-  def decode(<<data::binary>>, session),
-    do: {%__MODULE__{large_communities: decode_large_communities(data, [])}, session}
+  def decode(<<data::binary>>, _session),
+    do: %__MODULE__{large_communities: decode_large_communities(data, [])}
 
   defp decode_large_communities(<<>>, large_communities), do: Enum.reverse(large_communities)
 
@@ -24,12 +24,12 @@ defmodule BGP.Message.UPDATE.Attribute.LargeCommunities do
        do: decode_large_communities(rest, [{asn, data1, data2} | large_communities])
 
   @impl Encoder
-  def encode(%__MODULE__{large_communities: large_communities}, session) do
+  def encode(%__MODULE__{large_communities: large_communities}, _session) do
     {data, length} =
       Enum.map_reduce(large_communities, 0, fn {asn, data1, data2}, length ->
         {[<<asn::32>>, <<data1::32>>, <<data2::32>>], length + 12}
       end)
 
-    {data, length, session}
+    {data, length}
   end
 end

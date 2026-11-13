@@ -3,7 +3,6 @@ defmodule BGP.Message.OPEN.Capabilities do
 
   alias BGP.Message.AFN
   alias BGP.Message.{Encoder, NOTIFICATION}
-  alias BGP.Server.Session
 
   @asn_four_octets_max floor(:math.pow(2, 32)) - 1
 
@@ -32,55 +31,40 @@ defmodule BGP.Message.OPEN.Capabilities do
   @behaviour Encoder
 
   @impl Encoder
-  def decode(data, session) do
-    decode_capabilities(data, %__MODULE__{}, session)
-  end
+  def decode(data, _session), do: decode_capabilities(data, %__MODULE__{})
 
-  defp decode_capabilities(<<>>, capabilities, session), do: {capabilities, session}
+  defp decode_capabilities(<<>>, capabilities), do: capabilities
 
   defp decode_capabilities(
          <<code::8, length::8, value::binary-size(length), rest::binary>>,
-         capabilities,
-         session
-       ) do
-    {capabilities, session} = decode_capability(code, value, capabilities, session)
-    decode_capabilities(rest, capabilities, session)
-  end
+         capabilities
+       ),
+       do: decode_capabilities(rest, decode_capability(code, value, capabilities))
 
-  defp decode_capability(
-         1,
-         <<afi::16, _reserved::8, safi::8>>,
-         %__MODULE__{} = capabilities,
-         session
-       ) do
+  defp decode_capability(1, <<afi::16, _reserved::8, safi::8>>, %__MODULE__{} = capabilities) do
     with {:ok, afi} <- AFN.decode_afi(afi),
          {:ok, safi} <- AFN.decode_safi(safi) do
-      {%{capabilities | multi_protocol: {afi, safi}}, session}
+      %{capabilities | multi_protocol: {afi, safi}}
     else
       :error ->
         raise NOTIFICATION, code: :open_message
     end
   end
 
-  defp decode_capability(2, <<>>, %__MODULE__{} = capabilities, session),
-    do: {%{capabilities | route_refresh: true}, session}
+  defp decode_capability(2, <<>>, %__MODULE__{} = capabilities),
+    do: %{capabilities | route_refresh: true}
 
-  defp decode_capability(6, <<>>, %__MODULE__{} = capabilities, session),
-    do: {%{capabilities | extended_message: true}, session}
+  defp decode_capability(6, <<>>, %__MODULE__{} = capabilities),
+    do: %{capabilities | extended_message: true}
 
   defp decode_capability(
          64,
          <<restarted::1, _reserved::3, time::12, afs::binary>>,
-         %__MODULE__{} = capabilities,
-         session
+         %__MODULE__{} = capabilities
        ),
-       do:
-         {%{
-            capabilities
-            | graceful_restart: {restarted == 1, time, decode_afs(afs, [])}
-          }, session}
+       do: %{capabilities | graceful_restart: {restarted == 1, time, decode_afs(afs, [])}}
 
-  defp decode_capability(65, <<asn::32>>, %__MODULE__{} = capabilities, %Session{} = session) do
+  defp decode_capability(65, <<asn::32>>, %__MODULE__{} = capabilities) do
     if !(asn >= 1 and asn <= @asn_four_octets_max) do
       raise NOTIFICATION,
         code: :open_message,
@@ -88,13 +72,13 @@ defmodule BGP.Message.OPEN.Capabilities do
         data: <<asn::size(32)>>
     end
 
-    {%{capabilities | four_octets_asn: true}, %{session | four_octets: true}}
+    %{capabilities | four_octets_asn: true}
   end
 
-  defp decode_capability(70, <<>>, %__MODULE__{} = capabilities, session),
-    do: {%{capabilities | enanched_route_refresh: true}, session}
+  defp decode_capability(70, <<>>, %__MODULE__{} = capabilities),
+    do: %{capabilities | enanched_route_refresh: true}
 
-  defp decode_capability(_code, _data, _capabilities, _session) do
+  defp decode_capability(_code, _data, _capabilities) do
     raise NOTIFICATION, code: :open_message
   end
 
@@ -112,25 +96,18 @@ defmodule BGP.Message.OPEN.Capabilities do
 
   @impl Encoder
   def encode(%__MODULE__{} = capabilities, session) do
-    {data, {length, session}} =
-      [
-        &encode_multi_protocol/2,
-        &encode_route_refresh/2,
-        &encode_extended_message/2,
-        &encode_graceful_restart/2,
-        &encode_four_octets_asn/2,
-        &encode_enanched_route_refresh/2
-      ]
-      |> Enum.map_reduce({0, session}, fn encoder, {length, session} ->
-        {data, capability_length} = encoder.(capabilities, session)
-
-        {
-          data,
-          {length + capability_length, session}
-        }
-      end)
-
-    {data, length, session}
+    [
+      &encode_multi_protocol/2,
+      &encode_route_refresh/2,
+      &encode_extended_message/2,
+      &encode_graceful_restart/2,
+      &encode_four_octets_asn/2,
+      &encode_enanched_route_refresh/2
+    ]
+    |> Enum.map_reduce(0, fn encoder, length ->
+      {data, capability_length} = encoder.(capabilities, session)
+      {data, length + capability_length}
+    end)
   end
 
   defp encode_multi_protocol(%__MODULE__{multi_protocol: {afi, safi}}, _session) do

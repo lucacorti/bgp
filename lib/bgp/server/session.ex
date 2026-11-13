@@ -67,6 +67,7 @@ defmodule BGP.Server.Session do
           mode: mode(),
           networks: [IP.Prefix.t()],
           notification_without_open: boolean(),
+          peer_bgp_id: OPEN.bgp_id() | nil,
           port: :inet.port_number(),
           server: Server.t(),
           socket: Transport.socket(),
@@ -102,6 +103,7 @@ defmodule BGP.Server.Session do
             mode: nil,
             networks: [],
             notification_without_open: nil,
+            peer_bgp_id: nil,
             port: nil,
             server: nil,
             socket: nil,
@@ -162,6 +164,11 @@ defmodule BGP.Server.Session do
 
   @impl :gen_statem
   def handle_event(:enter, old_state, new_state, %__MODULE__{} = data) do
+    # The RDE monitors session processes, but the session can go down while the
+    # process keeps running (e.g. back to idle to retry connecting).
+    if old_state == :established and new_state != :established,
+      do: RDE.peer_down(data.server, data.host)
+
     with {:ok, pid} <- Server.session_for(data.server, data.host) do
       if pid == self() do
         Logger.info("#{data.server}: peer #{data.host}: #{old_state} -> #{new_state}")
@@ -229,29 +236,44 @@ defmodule BGP.Server.Session do
 
   @impl :gen_statem
   def handle_event(:info, {:tcp, socket, tcp_data}, _state, %__MODULE__{} = data) do
+    # Only split messages here, decoding happens in `{:recv_raw, msg_data}` so that each
+    # message is decoded with the session state left by handling the previous one
+    # (e.g. capabilities negotiated by an OPEN).
     {actions, data} =
       (data.buffer <> tcp_data)
       |> Message.stream!()
       |> Enum.map_reduce(data, fn {rest, msg_data}, %__MODULE__{} = data ->
-        {msg, data} = Message.decode(msg_data, data)
-        # Logger.debug("peer #{data.host}: received #{inspect(msg)}")
-        {{:next_event, :internal, {:recv, msg}}, %{data | buffer: rest}}
+        {{:next_event, :internal, {:recv_raw, msg_data}}, %{data | buffer: rest}}
       end)
 
     {:keep_state, data, actions}
   catch
     :error, %NOTIFICATION{} = error ->
-      Logger.error("#{data.server}: peer #{data.host}: error decoding message: #{inspect(error)}")
+      Logger.error("#{data.server}: peer #{data.host}: error framing message: #{inspect(error)}")
 
-      {
-        :keep_state_and_data,
-        [
-          {:next_event, :internal, {:send, error}},
-          {:next_event, :internal, {:tcp_connection, :disconnect}}
-        ]
-      }
+      {:keep_state_and_data,
+       [
+         {:next_event, :internal, {:send, error}},
+         {:next_event, :internal, {:tcp_connection, :disconnect}}
+       ]}
   after
     :inet.setopts(socket, active: :once)
+  end
+
+  @impl :gen_statem
+  def handle_event(:internal, {:recv_raw, msg_data}, _state, %__MODULE__{} = data) do
+    msg = Message.decode(msg_data, data)
+    # Logger.debug("peer #{data.host}: received #{inspect(msg)}")
+    {:keep_state_and_data, [{:next_event, :internal, {:recv, msg}}]}
+  catch
+    :error, %NOTIFICATION{} = error ->
+      Logger.error("#{data.server}: peer #{data.host}: error decoding message: #{inspect(error)}")
+
+      {:keep_state_and_data,
+       [
+         {:next_event, :internal, {:send, error}},
+         {:next_event, :internal, {:tcp_connection, :disconnect}}
+       ]}
   end
 
   @impl :gen_statem
@@ -614,7 +636,7 @@ defmodule BGP.Server.Session do
         {
           :next_state,
           :open_confirm,
-          data,
+          apply_open(data, open),
           [
             {:next_event, :internal, {:restart_timer, :keep_alive, div(open.hold_time, 3)}},
             {:next_event, :internal, {:restart_timer, :hold_time, open.hold_time}}
@@ -622,11 +644,11 @@ defmodule BGP.Server.Session do
           ]
         }
 
-      %OPEN{} when delay_open_timer_running ->
+      %OPEN{} = open when delay_open_timer_running ->
         {
           :next_state,
           :open_confirm,
-          data,
+          apply_open(data, open),
           [
             {:next_event, :internal, {:restart_timer, :keep_alive, nil}},
             {:next_event, :internal, {:set_timer, :hold_time, nil}}
@@ -819,11 +841,11 @@ defmodule BGP.Server.Session do
     ]
 
     case msg do
-      %OPEN{hold_time: hold_time} when delay_open_timer_running and hold_time > 0 ->
+      %OPEN{hold_time: hold_time} = open when delay_open_timer_running and hold_time > 0 ->
         {
           :next_state,
           :open_confirm,
-          data,
+          apply_open(data, open),
           [
             {:next_event, :internal, {:restart_timer, :keep_alive, div(hold_time, 3)}},
             {:next_event, :internal, {:restart_timer, :hold_time, hold_time}}
@@ -831,11 +853,11 @@ defmodule BGP.Server.Session do
           ]
         }
 
-      %OPEN{} when delay_open_timer_running ->
+      %OPEN{} = open when delay_open_timer_running ->
         {
           :next_state,
           :open_confirm,
-          data,
+          apply_open(data, open),
           [
             {:next_event, :internal, {:set_timer, :keep_alive, 0}},
             {:next_event, :internal, {:set_timer, :hold_time, 0}}
@@ -971,7 +993,7 @@ defmodule BGP.Server.Session do
         {
           :next_state,
           :open_confirm,
-          data,
+          apply_open(data, open),
           [
             {:next_event, :internal, :detect_collision},
             {:next_event, :internal, {:set_timer, :delay_open, 0}},
@@ -982,11 +1004,11 @@ defmodule BGP.Server.Session do
           ]
         }
 
-      %OPEN{} ->
+      %OPEN{} = open ->
         {
           :next_state,
           :open_confirm,
-          data,
+          apply_open(data, open),
           [
             {:next_event, :internal, :detect_collision},
             {:next_event, :internal, {:set_timer, :delay_open, 0}},
@@ -1388,6 +1410,15 @@ defmodule BGP.Server.Session do
         {:next_event, :internal, {:send, %NOTIFICATION{code: :cease}}},
         {:next_event, :internal, {:tcp_connection, :disconnect}}
       ]
+    }
+  end
+
+  defp apply_open(%__MODULE__{} = data, %OPEN{} = open) do
+    %{
+      data
+      | peer_bgp_id: open.bgp_id,
+        four_octets: open.capabilities.four_octets_asn,
+        extended_message: open.capabilities.extended_message
     }
   end
 
