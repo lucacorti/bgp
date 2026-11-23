@@ -12,6 +12,6 @@
   "nimble_options": {:hex, :nimble_options, "1.2.0", "73e5c5fecb08e59f390e0f59c2320b585d72470dbdd9230a469e06881b9dd4a8", [:mix], [], "hexpm", "3a784a75ef9e407619c8c9e98239b1acd29216deb737044a8c1063e2671ce6d9"},
   "nimble_parsec": {:hex, :nimble_parsec, "1.4.2", "8efba0122db06df95bfaa78f791344a89352ba04baedd3849593bfce4d0dc1c6", [:mix], [], "hexpm", "4b21398942dda052b403bbe1da991ccd03a053668d147d53fb8c4e0efe09c973"},
   "saxy": {:hex, :saxy, "1.7.0", "61802f6e0e38ff4e6f29750018b95fe22f977bd989c446f9058c816684b23b87", [:mix], [], "hexpm", "a25acd81a6112828a3d190f568e9f716f6334eeba22ac3abc50bbb851fac91e2"},
-  "telemetry": {:hex, :telemetry, "1.4.2", "a0cb522801dffb1c49fe6e30561badffc7b6d0e180db1300df759faa22062855", [:rebar3], [], "hexpm", "928f6495066506077862c0d1646609eed891a4326bee3126ba54b60af61febb1"},
+  "telemetry": {:hex, :telemetry, "1.4.3", "d0333fa869361e6833d6ff8e806ff4d8553fe1332fcce0af86c7381951a1dc2f", [:rebar3], [], "hexpm", "17a63581cf2e832a238287f5fe6811e8ca1f333249f1376ad653164a3c4770d4"},
   "thousand_island": {:hex, :thousand_island, "1.6.0", "d6ad7c2220c96a270cc8ca1586ec4d8bde648a4a3a53f003ce093f41beec0288", [:mix], [{:telemetry, "~> 0.4 or ~> 1.0", [hex: :telemetry, repo: "hexpm", optional: false]}], "hexpm", "4d4720470f091fc21a1311777c2ac66916c43621bffc068590c9f9bb3cd057a3"},
 }
