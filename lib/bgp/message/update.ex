@@ -31,17 +31,14 @@ defmodule BGP.Message.UPDATE do
       when (session.extended_message and
               withdrawn_length + attributes_length + @header_size + 4 <= @extended_max_size) or
              withdrawn_length + attributes_length + @header_size + 4 <= @max_size do
-    {attributes, session} = decode_attributes(attributes, [], session)
+    attributes = decode_attributes(attributes, [], session)
 
     with {:ok, withdrawn_prefixes} <- Message.decode_prefixes(withdrawn),
          {:ok, nlri_prefixes} <- Message.decode_prefixes(nlri) do
-      {
-        %__MODULE__{
-          withdrawn_routes: withdrawn_prefixes,
-          path_attributes: attributes,
-          nlri: nlri_prefixes
-        },
-        session
+      %__MODULE__{
+        withdrawn_routes: withdrawn_prefixes,
+        path_attributes: attributes,
+        nlri: nlri_prefixes
       }
     else
       {:error, data} ->
@@ -53,14 +50,14 @@ defmodule BGP.Message.UPDATE do
     raise NOTIFICATION, code: :update_message, subcode: :malformed_attribute_list
   end
 
-  defp decode_attributes(<<>>, attributes, session), do: {Enum.reverse(attributes), session}
+  defp decode_attributes(<<>>, attributes, _session), do: Enum.reverse(attributes)
 
   defp decode_attributes(<<header::binary-size(2), data::binary>>, attributes, session) do
     <<_other_flags::3, extended::1, _unused::4, _code::8>> = header
     size = 8 + 8 * extended
     <<length::size(^size), attribute::binary-size(length), rest::binary>> = data
 
-    {attribute, session} =
+    attribute =
       Attribute.decode(<<header::binary, length::size(size), attribute::binary>>, session)
 
     decode_attributes(rest, [attribute | attributes], session)
@@ -69,23 +66,19 @@ defmodule BGP.Message.UPDATE do
   @impl Encoder
   def encode(%__MODULE__{} = msg, session) do
     {wr_data, wr_length} = Message.encode_prefixes(msg.withdrawn_routes)
-    {pa_data, pa_length, session} = encode_attributes(msg.path_attributes, session)
+    {pa_data, pa_length} = encode_attributes(msg.path_attributes, session)
     {nlri_data, nlri_length} = Message.encode_prefixes(msg.nlri)
 
     {
       [<<wr_length::16>>, wr_data, <<pa_length::16>>, pa_data, nlri_data],
-      2 + wr_length + 2 + pa_length + nlri_length,
-      session
+      2 + wr_length + 2 + pa_length + nlri_length
     }
   end
 
   defp encode_attributes(attributes, session) do
-    {data, {length, session}} =
-      Enum.map_reduce(attributes, {0, session}, fn attribute, {length, session} ->
-        {data, attribute_length, session} = Attribute.encode(attribute, session)
-        {data, {length + attribute_length, session}}
-      end)
-
-    {data, length, session}
+    Enum.map_reduce(attributes, 0, fn attribute, length ->
+      {data, attribute_length} = Attribute.encode(attribute, session)
+      {data, length + attribute_length}
+    end)
   end
 end

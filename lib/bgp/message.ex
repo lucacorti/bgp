@@ -20,7 +20,7 @@ defmodule BGP.Message do
     {ROUTEREFRESH, 5}
   ]
 
-  @spec decode(binary(), Session.data()) :: {t(), Session.data()} | no_return()
+  @spec decode(binary(), Session.data()) :: t() | no_return()
   def decode(<<@marker::@marker_size, length::16, type::8, msg::binary>>, %Session{} = session)
       when length >= @header_size do
     case module_for_type(type) do
@@ -49,21 +49,12 @@ defmodule BGP.Message do
     raise NOTIFICATION, code: :message_header, subcode: :connection_not_synchronized
   end
 
-  @spec encode(t(), Session.data()) :: {iodata(), Session.data()} | no_return()
+  @spec encode(t(), Session.data()) :: iodata() | no_return()
   def encode(%module{} = message, session) do
     case type_for_module(module) do
       {:ok, type} ->
-        {data, length, session} = module.encode(message, session)
-
-        {
-          [
-            <<@marker::@marker_size>>,
-            <<@header_size + length::16>>,
-            <<type::8>>,
-            data
-          ],
-          session
-        }
+        {data, length} = module.encode(message, session)
+        [<<@marker::@marker_size>>, <<@header_size + length::16>>, <<type::8>>, data]
 
       :error ->
         raise NOTIFICATION, code: :message_header, subcode: :bad_message_type, data: module

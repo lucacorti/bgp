@@ -8,12 +8,16 @@ defmodule BGP.Server do
   @peer_schema as_origination: [
                  type: :keyword_list,
                  keys: [
+                   ibgp_seconds: [
+                     doc: "AS Origination timer seconds (iBGP).",
+                     type: :non_neg_integer
+                   ],
                    seconds: [
-                     doc: "AS Origination timer seconds.",
+                     doc: "AS Origination timer seconds (eBGP).",
                      type: :non_neg_integer
                    ]
                  ],
-                 default: [seconds: 15]
+                 default: [ibgp_seconds: 15, seconds: 15]
                ],
                asn: [
                  doc: "Peer Autonomous System Number.",
@@ -28,24 +32,45 @@ defmodule BGP.Server do
                connect_retry: [
                  type: :keyword_list,
                  keys: [
-                   seconds: [doc: "Connect Retry timer seconds.", type: :non_neg_integer]
+                   ibgp_seconds: [
+                     doc: "Connect Retry timer seconds (iBGP).",
+                     type: :non_neg_integer
+                   ],
+                   seconds: [
+                     doc: "Connect Retry timer seconds (eBGP).",
+                     type: :non_neg_integer
+                   ]
                  ],
-                 default: [seconds: 120]
+                 default: [ibgp_seconds: 120, seconds: 120]
                ],
                delay_open: [
                  type: :keyword_list,
                  keys: [
                    enabled?: [doc: "Enable Delay OPEN.", type: :boolean],
-                   seconds: [doc: "Delay OPEN timer seconds.", type: :non_neg_integer]
+                   ibgp_seconds: [
+                     doc: "Delay OPEN timer seconds (iBGP).",
+                     type: :non_neg_integer
+                   ],
+                   seconds: [
+                     doc: "Delay OPEN timer seconds (eBGP).",
+                     type: :non_neg_integer
+                   ]
                  ],
-                 default: [enabled?: true, seconds: 5]
+                 default: [enabled?: true, ibgp_seconds: 5, seconds: 5]
                ],
                hold_time: [
                  type: :keyword_list,
                  keys: [
-                   seconds: [doc: "Hold Time timer seconds.", type: :non_neg_integer]
+                   ibgp_seconds: [
+                     doc: "Hold Time timer seconds (iBGP).",
+                     type: :non_neg_integer
+                   ],
+                   seconds: [
+                     doc: "Hold Time timer seconds (eBGP).",
+                     type: :non_neg_integer
+                   ]
                  ],
-                 default: [seconds: 90]
+                 default: [ibgp_seconds: 90, seconds: 90]
                ],
                host: [
                  doc: "Peer IP address as string.",
@@ -55,9 +80,16 @@ defmodule BGP.Server do
                keep_alive: [
                  type: :keyword_list,
                  keys: [
-                   seconds: [doc: "Keep Alive timer seconds.", type: :non_neg_integer]
+                   ibgp_seconds: [
+                     doc: "Keep Alive timer seconds (iBGP).",
+                     type: :non_neg_integer
+                   ],
+                   seconds: [
+                     doc: "Keep Alive timer seconds (eBGP).",
+                     type: :non_neg_integer
+                   ]
                  ],
-                 default: [seconds: 30]
+                 default: [ibgp_seconds: 30, seconds: 30]
                ],
                notification_without_open: [
                  doc: "Allows NOTIFICATIONS to be received without OPEN first.",
@@ -77,12 +109,16 @@ defmodule BGP.Server do
                route_advertisement: [
                  type: :keyword_list,
                  keys: [
+                   ibgp_seconds: [
+                     doc: "Route Advertisement timer seconds (iBGP).",
+                     type: :non_neg_integer
+                   ],
                    seconds: [
-                     doc: "Route Advertisement timer seconds.",
+                     doc: "Route Advertisement timer seconds (eBGP).",
                      type: :non_neg_integer
                    ]
                  ],
-                 default: [seconds: 30]
+                 default: [ibgp_seconds: 5, seconds: 30]
                ],
                start: [
                  doc: "Type of session startup.",
@@ -110,6 +146,16 @@ defmodule BGP.Server do
                    doc: "Server BGP ID, IP address as string.",
                    type: {:custom, IP.Address, :from_string, []},
                    required: true
+                 ],
+                 rde: [
+                   type: :keyword_list,
+                   keys: [
+                     interval: [
+                       doc: "Interval between Decision Process runs, in seconds.",
+                       type: :pos_integer
+                     ]
+                   ],
+                   default: [interval: 10_000]
                  ],
                  networks: [
                    doc: "Server AS Networks to announce to peers",
@@ -171,7 +217,10 @@ defmodule BGP.Server do
     Supervisor.init(
       [
         {Registry, keys: :unique, name: session_registry(args[:server])},
-        {BGP.Server.RDE, server: args[:server]},
+        {
+          BGP.Server.RDE,
+          server: args[:server], asn: args[:asn], interval: args[:rde][:interval]
+        },
         {BGP.Server.Session.Supervisor, args[:server]},
         {
           ThousandIsland,
@@ -180,6 +229,13 @@ defmodule BGP.Server do
       ],
       strategy: :one_for_all
     )
+  end
+
+  @spec active_sessions(t) :: [{IP.Address.t(), pid(), term()}]
+  def active_sessions(server) do
+    server
+    |> session_registry()
+    |> Registry.select([{{:"$1", :"$2", :"$3"}, [], [{{:"$1", :"$2", :"$3"}}]}])
   end
 
   @spec get_config(t()) :: keyword()

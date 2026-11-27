@@ -97,16 +97,11 @@ defmodule BGP.Message.UPDATE.Attribute do
       {:ok, module} ->
         check_flags(module, optional, transitive, partial, data)
 
-        {value, session} = module.decode(attribute, session)
-
-        {
-          %__MODULE__{
-            optional: optional,
-            partial: partial,
-            transitive: transitive,
-            value: value
-          },
-          session
+        %__MODULE__{
+          optional: optional,
+          partial: partial,
+          transitive: transitive,
+          value: module.decode(attribute, session)
         }
 
       :error ->
@@ -118,7 +113,7 @@ defmodule BGP.Message.UPDATE.Attribute do
   def encode(%__MODULE__{value: %module{} = value} = attribute, session) do
     case code_for_module(module) do
       {:ok, type} ->
-        {data, length, session} = module.encode(value, session)
+        {data, length} = module.encode(value, session)
         extended = if length > 255, do: 1, else: 0
         length_size = 8 + 8 * extended
 
@@ -135,8 +130,7 @@ defmodule BGP.Message.UPDATE.Attribute do
             <<length::size(length_size)>>,
             data
           ],
-          2 + div(length_size, 8) + length,
-          session
+          2 + div(length_size, 8) + length
         }
 
       :error ->
